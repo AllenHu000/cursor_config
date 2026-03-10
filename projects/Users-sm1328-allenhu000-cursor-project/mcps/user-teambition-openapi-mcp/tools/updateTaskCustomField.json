@@ -1,0 +1,65 @@
+{
+  "name": "updateTaskCustomField",
+  "description": "更新任务字段信息",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "taskId": {
+        "type": "string"
+      },
+      "customfieldId": {
+        "type": "string"
+      },
+      "requestBody": {
+        "type": "object",
+        "properties": {
+          "taskId": {
+            "type": "string"
+          },
+          "customfieldId": {
+            "type": "string"
+          },
+          "disableActivity": {
+            "type": "number",
+            "description": "是否不产生动态"
+          },
+          "value": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "description": "自定义字段值"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "thumbUrl": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "meta": {
+                  "type": "object",
+                  "additionalProperties": {},
+                  "description": "自定义字段额外信息"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "taskId",
+          "customfieldId"
+        ],
+        "additionalProperties": false,
+        "description": "The JSON request body."
+      }
+    },
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

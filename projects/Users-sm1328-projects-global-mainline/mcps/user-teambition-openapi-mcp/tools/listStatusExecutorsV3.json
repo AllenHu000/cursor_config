@@ -1,0 +1,23 @@
+{
+  "name": "listStatusExecutorsV3",
+  "description": "列出项目工作流状态流转执行角色列表",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string",
+        "description": "项目ID"
+      },
+      "tfsId": {
+        "type": "string",
+        "description": "工作流状态ID"
+      }
+    },
+    "required": [
+      "projectId",
+      "tfsId"
+    ],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

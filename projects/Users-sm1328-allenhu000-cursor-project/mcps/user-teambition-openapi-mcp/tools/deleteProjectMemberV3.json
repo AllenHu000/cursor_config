@@ -1,0 +1,37 @@
+{
+  "name": "deleteProjectMemberV3",
+  "description": "删除项目成员",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string",
+        "description": "项目ID"
+      },
+      "requestBody": {
+        "type": "object",
+        "properties": {
+          "userIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "用户ID"
+            },
+            "minItems": 1,
+            "maxItems": 100
+          }
+        },
+        "required": [
+          "userIds"
+        ],
+        "additionalProperties": false,
+        "description": "The JSON request body."
+      }
+    },
+    "required": [
+      "projectId"
+    ],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

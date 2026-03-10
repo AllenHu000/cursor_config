@@ -1,0 +1,21 @@
+{
+  "name": "deleteTask",
+  "description": "删除钉钉待办",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "unionId": {
+        "type": "string",
+        "description": "用户UnionId"
+      },
+      "taskId": {
+        "type": "string",
+        "description": "待办ID"
+      }
+    },
+    "required": [
+      "unionId",
+      "taskId"
+    ]
+  }
+}

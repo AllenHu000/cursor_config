@@ -1,0 +1,9 @@
+---
+pid: 69636
+cwd: /Users/sm1328/allenhu000/cursor_project
+last_command: pwd
+last_exit_code: 0
+---
+sm1328:cursor_project/ (master✗) $ pwd                                                                                  [17:24:01]
+/Users/sm1328/allenhu000/cursor_project
+sm1328:cursor_project/ (master✗) $                                                                                      [17:24:03]

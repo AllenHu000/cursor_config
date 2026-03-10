@@ -1,0 +1,29 @@
+{
+  "name": "updateTaskContentV3",
+  "description": "更新任务标题",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "taskId": {
+        "type": "string",
+        "description": "任务ID"
+      },
+      "requestBody": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "任务标题"
+          }
+        },
+        "additionalProperties": false,
+        "description": "更新任务标题请求"
+      }
+    },
+    "required": [
+      "taskId"
+    ],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

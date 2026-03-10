@@ -1,0 +1,22 @@
+{
+  "name": "query-project-detail",
+  "description": "根据项目编码查询 MaxIoT 项目的详细信息",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "projectCode": {
+        "type": "string",
+        "description": "项目编码，如 PRJ240108..."
+      },
+      "tenantCode": {
+        "type": "string",
+        "description": "租户编码，不传使用默认值"
+      }
+    },
+    "required": [
+      "projectCode"
+    ],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

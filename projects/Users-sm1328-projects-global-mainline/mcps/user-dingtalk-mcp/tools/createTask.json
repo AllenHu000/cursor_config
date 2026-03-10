@@ -1,0 +1,43 @@
+{
+  "name": "createTask",
+  "description": "创建待办",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "unionId": {
+        "type": "string",
+        "description": "待办创建者的UnionId"
+      },
+      "subject": {
+        "type": "string",
+        "description": "待办标题，最大长度1024"
+      },
+      "description": {
+        "type": "string",
+        "description": "待办备注，最大长度4096"
+      },
+      "dueTime": {
+        "type": "number",
+        "description": "待办截止时间，Unix时间戳，单位毫秒。"
+      },
+      "executorIds": {
+        "type": "array",
+        "description": "待办执行人的UnionId",
+        "items": {
+          "type": "string"
+        }
+      },
+      "participantIds": {
+        "type": "array",
+        "description": "待办参与人的UnionId",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "unionId",
+      "subject"
+    ]
+  }
+}

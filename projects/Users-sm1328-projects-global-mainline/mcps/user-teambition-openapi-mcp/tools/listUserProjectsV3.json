@@ -1,0 +1,31 @@
+{
+  "name": "listUserProjectsV3",
+  "description": "获取用户参与项目",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "projectIds": {
+        "type": "string",
+        "description": "项目ID集合，逗号分隔"
+      },
+      "projectRoleLevels": {
+        "type": "string",
+        "description": "过滤指定的项目角色等级，逗号分割，可以填写 0,1,2 分别表示成员, 管理员, 拥有者"
+      },
+      "sortBy": {
+        "type": "string",
+        "description": "排序，可选 `updated:desc` 或者 `pinyin:asc`"
+      },
+      "pageSize": {
+        "type": "number",
+        "description": "分页大小"
+      },
+      "pageToken": {
+        "type": "string",
+        "description": "分页标"
+      }
+    },
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

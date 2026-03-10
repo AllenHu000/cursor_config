@@ -1,0 +1,90 @@
+---
+description: 全局通用规则，适用于所有项目
+globs:
+alwaysApply: true
+---
+
+# 全局规则
+
+## 语言与沟通
+
+- 始终使用中文回复
+- 解释要简洁明了，避免冗余废话
+- 涉及专业术语时保留英文原词，附中文解释
+
+## 代码风格
+
+- 优先修改现有文件，不要随意创建新文件
+- 代码变更尽量小而精确，只改必要的部分
+- 不要添加描述"做了什么"的废话注释，注释只解释"为什么"
+- 错误处理必须明确，禁止静默吞掉异常
+- 删除无用的 import 和死代码
+
+## Git 规范
+
+- 提交信息使用 Conventional Commits 格式（feat / fix / refactor / docs / chore）
+- 提交信息用英文，简洁描述变更目的
+- 不要提交包含敏感信息的文件（.env、\*.pem、credentials 等）
+
+## 工作方式
+
+- 修改代码前必须先阅读相关文件，理解上下文
+- 遇到不确定的需求时主动询问，不要猜测
+- 给出方案时优先考虑简单直接的实现，并通过了测试必要的测试用例
+- 如果有多种方案，简要列出优缺点让我选择
+
+## 约定
+- 如果我说“初始化项目”之类的，通过`init-project`命名进行初始化。
+- 我说的项目一般指大程序项目（maxiot）,可以用`maxiot-mcp`
+- 我说TB，指的是Teambition管理工具，可以用`teambition-openapi-mcp`
+- 我说文档，如果不加特殊说明，指的是钉钉文档。我的文档指的是钉钉文档下“我的文档”工作空间
+
+## MCP
+- 实现MCP时，同时配套的Skill、使用文档也需要具备
+
+
+## 大程序（maxIot）
+我参与的低代码平台，在线IDE
+- [开发者中心](https://dev.maxiot.com/)
+- [大程序文档中心](https://doc.maxiot.com/developer?page=readme&lang=zh)，可通过lang:zh/en切换中英文
+- 大程序登录开发者中心需要登录账号，需要选择账号所参与的组织（tenantCode,tenantName）,每个组织下有若干个项目（project）
+- 几个概念：
+| 描述 | 对应取值 |
+|---------|----------|
+| 组织 | tenantCode，tenantName ，tenantAlias|
+| 租户code | tenantCode |
+| 项目code | projectCode |
+| 迭代code | iterationCode |
+
+
+## 主要TB项目
+
+### 商米大程序
+- 项目ID: 6160fed2040018338d4502cb
+- 项目链接: https://www.teambition.com/project/6160fed2040018338d4502cb
+
+#### 当前活跃迭代
+| 迭代名称 | sprintId |
+|---------|----------|
+| 全球主线1期 | 69ae2919ea4ae63ea41f4899 |
+
+#### 任务类型 (sfcId)
+| 类型 | sfcId |
+|------|-------|
+| 缺陷 | 6160fed282b368dec99459e0 |
+| 需求 | 6160fed2efff372c34c3ec66 |
+| 任务 | 6160fed2833e44b14b5428eb |
+
+#### 常用成员 (TB userId)
+| 姓名 | TB userId |
+|------|-----------|
+| 胡云波(云波)，自己 | 5c8f470e2cbe0500018a679c |
+| 郭永杰(永杰) | 564c1677fe9225190eedd197 |
+
+## 钉钉文档
+- [我的文档](https://alidocs.dingtalk.com/i/desktop/my-space)
+- 知识库
+  - [大程序模版应用](https://alidocs.dingtalk.com/i/spaces/YRBGvLeD2RMb9XDA/overview)
+  - [大程序](https://alidocs.dingtalk.com/i/spaces/YRBGvaObD16yYmDA/overview)
+
+

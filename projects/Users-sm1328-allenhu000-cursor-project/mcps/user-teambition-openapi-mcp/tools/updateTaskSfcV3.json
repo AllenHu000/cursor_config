@@ -1,0 +1,36 @@
+{
+  "name": "updateTaskSfcV3",
+  "description": "更新任务的任务类型",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "taskId": {
+        "type": "string",
+        "description": "任务ID"
+      },
+      "requestBody": {
+        "type": "object",
+        "properties": {
+          "sfcId": {
+            "type": "string",
+            "description": "目标任务类型ID，更新类型时会同时改变状态到目标任务类型绑定的工作流状态"
+          },
+          "tfsId": {
+            "type": "string",
+            "description": "指定目标工作流状态ID（可选），需保证状态流程阶段和任务流程阶段相同"
+          }
+        },
+        "required": [
+          "sfcId"
+        ],
+        "additionalProperties": false,
+        "description": "The JSON request body."
+      }
+    },
+    "required": [
+      "taskId"
+    ],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

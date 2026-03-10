@@ -1,0 +1,8 @@
+{
+  "name": "get_my_docs_root_dentry_uuid",
+  "description": "获取当前用户“我的文档”空间的根目录节点 ID（rootDentryUuid），该 ID 可作为父节点用于创建新文档或文件夹。返回结果为一个唯一的字符串标识，仅限用户本人访问，适用于初始化文档操作、构建个人文档树等场景",
+  "arguments": {
+    "type": "object",
+    "properties": {}
+  }
+}

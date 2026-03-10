@@ -1,0 +1,20 @@
+{
+  "name": "getUserDetailByUserId",
+  "description": "查询用户详情 - 根据userId获取用户的详细信息，包含用户的unionId。",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "userid": {
+        "type": "string",
+        "description": "用户的userId。"
+      },
+      "language": {
+        "type": "string",
+        "description": "语言。 * **zh_CN** ：中文（默认值） * **en_US** ：英文"
+      }
+    },
+    "required": [
+      "userid"
+    ]
+  }
+}

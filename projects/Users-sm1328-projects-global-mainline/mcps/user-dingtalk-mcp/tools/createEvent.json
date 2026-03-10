@@ -1,0 +1,75 @@
+{
+  "name": "createEvent",
+  "description": "创建一个新的日程，支持设置时间、地点、参与者、提醒、重复规则等",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "unionId": {
+        "type": "string",
+        "description": "日程创建者的unionId"
+      },
+      "calendarId": {
+        "type": "string",
+        "description": "日程所属的日历ID，统一为primary，表示用户的主日历"
+      },
+      "summary": {
+        "type": "string",
+        "description": "日程标题，最大不超过2048个字符"
+      },
+      "description": {
+        "type": "string",
+        "description": "日程描述，最大不超过5000个字符"
+      },
+      "start": {
+        "type": "object",
+        "description": "日程开始时间对象。非全天日程格式示例：{\"dateTime\":\"2025-09-20T10:15:30+08:00\",\"timeZone\":\"Asia/Shanghai\"}；全天日程格式：{\"date\":\"2025-09-20\"}"
+      },
+      "end": {
+        "type": "object",
+        "description": "日程结束时间对象。非全天日程格式示例：{\"dateTime\":\"2025-09-20T11:15:30+08:00\",\"timeZone\":\"Asia/Shanghai\"}；全天日程格式：{\"date\":\"2025-09-21\"}（全天日程结束日期需要+1天）"
+      },
+      "isAllDay": {
+        "type": "boolean",
+        "description": "是否全天日程"
+      },
+      "location": {
+        "type": "object",
+        "description": "日程地点对象，包含displayName字段。示例：{\"displayName\":\"会议室A\"}"
+      },
+      "attendees": {
+        "type": "array",
+        "description": "日程参与人列表，最多支持500个参与人。数组中每个对象包含id（用户unionId）和isOptional（是否可选参与人）字段。示例：[{\"id\":\"unionId123\",\"isOptional\":false}]"
+      },
+      "reminders": {
+        "type": "array",
+        "description": "日程提醒设置，数组中每个对象包含method和minutes字段。如不传默认开始前15分钟提醒，传空数组表示不设提醒。method只支持\"dingtalk\"（钉钉内提醒），minutes为Integer类型表示提前N分钟提醒。示例：[{\"method\":\"dingtalk\",\"minutes\":15}]"
+      },
+      "recurrence": {
+        "type": "object",
+        "description": "日程循环规则对象"
+      },
+      "onlineMeetingInfo": {
+        "type": "object",
+        "description": "创建日程同时创建线上会议。对象包含type字段，目前只支持\"dingtalk\"（钉钉视频会议）。示例：{\"type\":\"dingtalk\"}"
+      },
+      "extra": {
+        "type": "object",
+        "description": "扩展配置，如noPushNotification、noChatNotification等。示例：{\"noPushNotification\":\"true\",\"noChatNotification\":\"false\"}"
+      },
+      "uiConfigs": {
+        "type": "array",
+        "description": "UI配置，控制日程详情页内组件的展示"
+      },
+      "richTextDescription": {
+        "type": "object",
+        "description": "富文本描述对象"
+      }
+    },
+    "required": [
+      "unionId",
+      "calendarId",
+      "summary",
+      "start"
+    ]
+  }
+}

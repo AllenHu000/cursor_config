@@ -1,0 +1,37 @@
+{
+  "mcpServers": {
+    "teambition-openapi-mcp": {
+      "command": "npx",
+      "args": ["-y", "@tng/teambition-openapi-mcp", "user-mcp", "-u", "YOUR_TB_USER_TOKEN"]
+    },
+    "dingtalk-mcp": {
+      "command": "npx",
+      "args": ["-y", "dingtalk-mcp@latest"],
+      "env": {
+        "DINGTALK_Client_ID": "YOUR_CLIENT_ID",
+        "DINGTALK_Client_Secret": "YOUR_CLIENT_SECRET",
+        "ACTIVE_PROFILES": "dingtalk-contacts,dingtalk-calendar,dingtalk-tasks,dingtalk-robot-send-message"
+      }
+    },
+    "dingtalk-docs-mcp": {
+      "type": "streamable-http",
+      "url": "YOUR_DINGTALK_DOCS_MCP_URL_OR_LEAVE_AS_IS_IF_SAME"
+    },
+    "temp-mail-mcp": {
+      "command": "node",
+      "args": ["/Users/YOUR_USERNAME/.cursor/mcp-servers/temp-mail-mcp/src/index.mjs"]
+    },
+    "maxiot-mcp": {
+      "command": "node",
+      "args": ["/Users/YOUR_USERNAME/.cursor/mcp-servers/maxiot-mcp/src/index.mjs"],
+      "env": {
+        "MAXIOT_X_TOKEN": "YOUR_MAXIOT_X_TOKEN",
+        "MAXIOT_TOKEN": "YOUR_MAXIOT_TOKEN",
+        "MAXIOT_ORG_ID": "YOUR_ORG_ID",
+        "MAXIOT_APP_ID": "YOUR_APP_ID",
+        "MAXIOT_PROJECT_CODE": "YOUR_PROJECT_CODE",
+        "MAXIOT_TENANT_CODE": "YOUR_TENANT_CODE"
+      }
+    }
+  }
+}

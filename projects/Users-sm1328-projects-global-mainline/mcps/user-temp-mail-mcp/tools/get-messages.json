@@ -1,0 +1,23 @@
+{
+  "name": "get-messages",
+  "description": "获取该临时邮箱的收件列表（摘要）。需要创建邮箱时返回的 token。",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "token": {
+        "type": "string",
+        "description": "create-inbox 返回的 token"
+      },
+      "page": {
+        "type": "number",
+        "default": 1,
+        "description": "页码"
+      }
+    },
+    "required": [
+      "token"
+    ],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

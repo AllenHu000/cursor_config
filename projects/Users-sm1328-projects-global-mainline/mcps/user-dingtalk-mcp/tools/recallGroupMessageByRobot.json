@@ -1,0 +1,24 @@
+{
+  "name": "recallGroupMessageByRobot",
+  "description": "撤回机器人发送的群消息",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "openConversationId": {
+        "type": "string",
+        "description": "会话ID。"
+      },
+      "processQueryKeys": {
+        "type": "array",
+        "description": "要撤回的消息ID列表。",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "openConversationId",
+      "processQueryKeys"
+    ]
+  }
+}

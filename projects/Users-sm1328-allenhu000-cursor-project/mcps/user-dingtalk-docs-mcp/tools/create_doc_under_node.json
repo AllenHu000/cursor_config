@@ -1,0 +1,25 @@
+{
+  "name": "create_doc_under_node",
+  "description": "在指定父节点（通过 dentryUuid 标识，如文件夹、文档、或“我的文档”根目录）下创建一篇新的在线文档，需提供文档名称。成功后返回新文档的详细信息，包括文档 ID（dentryUuid）、标题、创建时间、访问链接等。操作受权限控制，仅当调用者对父节点有写入权限时可成功创建。",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "type": "string",
+        "title": "文档名称",
+        "description": "需要创建的文档名称"
+      },
+      "parentDentryUuid": {
+        "type": "string",
+        "title": "父节点ID",
+        "description": "需要创建的父节点ID。可使用 dentryUuid /docId（如来自创建文档、搜索有权限文档等操作的结果）"
+      }
+    },
+    "required": [
+      "parentDentryUuid",
+      "name"
+    ],
+    "title": "入参",
+    "description": "入参"
+  }
+}

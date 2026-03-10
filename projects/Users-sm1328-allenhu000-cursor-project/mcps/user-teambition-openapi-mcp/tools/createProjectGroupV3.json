@@ -1,0 +1,43 @@
+{
+  "name": "createProjectGroupV3",
+  "description": "创建项目分组",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "requestBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "organizationId": {
+            "type": "string",
+            "description": "归属企业 ID"
+          },
+          "visible": {
+            "type": "string",
+            "enum": [
+              "organization",
+              "involves"
+            ],
+            "description": "项目分组可见性，involves 私有项目分组, organization 公开项目分组"
+          },
+          "parentId": {
+            "type": "string",
+            "description": "父级项目分组 ID"
+          }
+        },
+        "required": [
+          "name",
+          "organizationId"
+        ],
+        "additionalProperties": false,
+        "description": "The JSON request body."
+      }
+    },
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

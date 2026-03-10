@@ -1,0 +1,16 @@
+{
+  "name": "getUserIdByUnionId",
+  "description": "根据unionId获取用户的userId。",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "unionid": {
+        "type": "string",
+        "description": "unionId,员工在当前开发者企业账号范围内的唯一标识"
+      }
+    },
+    "required": [
+      "unionid"
+    ]
+  }
+}

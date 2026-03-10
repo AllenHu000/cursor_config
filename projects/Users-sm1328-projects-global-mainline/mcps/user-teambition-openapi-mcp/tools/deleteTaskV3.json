@@ -1,0 +1,23 @@
+{
+  "name": "deleteTaskV3",
+  "description": "删除任务",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "taskId": {
+        "type": "string",
+        "description": "任务ID"
+      },
+      "requestBody": {
+        "type": "object",
+        "additionalProperties": {},
+        "description": "The JSON request body."
+      }
+    },
+    "required": [
+      "taskId"
+    ],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

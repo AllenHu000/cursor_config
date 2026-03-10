@@ -1,0 +1,41 @@
+{
+  "name": "updateTaskNoteV3",
+  "description": "更新任务备注",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "taskId": {
+        "type": "string",
+        "description": "任务ID"
+      },
+      "requestBody": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "description": "任务备注"
+          },
+          "renderMode": {
+            "type": "string",
+            "enum": [
+              "markdown",
+              "rtf"
+            ],
+            "description": "任务备注渲染模式, markdown, rtf, rtf就是富文本，富文本需要提交 rtfValueToken"
+          },
+          "rtfValueToken": {
+            "type": "string",
+            "description": "富文本内容，格式仅限从 rtf/render 接口中获取的 rtfValue"
+          }
+        },
+        "additionalProperties": false,
+        "description": "更新任务备注请求"
+      }
+    },
+    "required": [
+      "taskId"
+    ],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

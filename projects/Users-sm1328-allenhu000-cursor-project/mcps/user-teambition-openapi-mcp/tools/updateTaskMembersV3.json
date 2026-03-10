@@ -1,0 +1,57 @@
+{
+  "name": "updateTaskMembersV3",
+  "description": "更新任务参与者",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "taskId": {
+        "type": "string",
+        "description": "任务ID"
+      },
+      "requestBody": {
+        "type": "object",
+        "properties": {
+          "involveMembers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "参与者用户ID"
+            },
+            "description": "更新任务参与者列表"
+          },
+          "addInvolvers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "参与者用户ID"
+            },
+            "description": "新增参与者列表"
+          },
+          "delInvolvers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "参与者用户ID"
+            },
+            "description": "移除参与者列表"
+          },
+          "disableActivity": {
+            "type": "boolean",
+            "description": "是否忽略触发动态"
+          },
+          "disableNotification": {
+            "type": "boolean",
+            "description": "是否忽略触发通知"
+          }
+        },
+        "additionalProperties": false,
+        "description": "更新任务参与者请求"
+      }
+    },
+    "required": [
+      "taskId"
+    ],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

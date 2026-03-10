@@ -1,0 +1,23 @@
+{
+  "name": "queryTaskV3",
+  "description": "查询任务详情",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "taskId": {
+        "type": "string",
+        "description": "任务ID集合,使用逗号分隔,和parentTaskId冲突(选其一)"
+      },
+      "shortIds": {
+        "type": "string",
+        "description": "任务短ID集合,使用逗号分隔"
+      },
+      "parentTaskId": {
+        "type": "string",
+        "description": "父任务ID,和taskId冲突(选其一)"
+      }
+    },
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

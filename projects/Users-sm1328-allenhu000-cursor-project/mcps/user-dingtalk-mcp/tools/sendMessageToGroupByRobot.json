@@ -1,0 +1,31 @@
+{
+  "name": "sendMessageToGroupByRobot",
+  "description": "向群聊发送普通消息（非 DING、非待办）。 例如，当用户说“在群里说一下”、“通知到XX群”但未提及“DING”或“钉一下”时使用。\n",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "openConversationId": {
+        "type": "string",
+        "description": "会话ID。"
+      },
+      "msgParam": {
+        "type": "object",
+        "description": "sampleMarkdown消息内容",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "消息标题。"
+          },
+          "text": {
+            "type": "string",
+            "description": "消息内容，markdown格式。"
+          }
+        }
+      }
+    },
+    "required": [
+      "openConversationId",
+      "msgParam"
+    ]
+  }
+}

@@ -1,0 +1,174 @@
+{
+  "name": "updateTaskCusomFieldV3",
+  "description": "更新任务自定义字段值",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "taskId": {
+        "type": "string",
+        "description": "任务ID"
+      },
+      "requestBody": {
+        "type": "object",
+        "properties": {
+          "customfieldId": {
+            "type": "string",
+            "description": "自定义字段ID"
+          },
+          "customfieldName": {
+            "type": "string",
+            "description": "自定义字段名称(如果提供自定义字段ID 则忽略)"
+          },
+          "customfieldInstanceId": {
+            "type": "string",
+            "description": "自定义字段InstanceId(如果提供自定义字段ID 或者 自定义字段名称 则忽略)"
+          },
+          "customfieldAlias": {
+            "type": "string",
+            "description": "自定义字段别名(如果提供自定义字段ID 则忽略)"
+          },
+          "disableActivity": {
+            "type": "boolean",
+            "description": "是否忽略触发动态"
+          },
+          "value": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "字段值ID。用于统计, 自动化触发条件作用; 对于成员类型的字段这个值需要填写用户ID, 可以利用通讯录接口响应中的 userId 字段"
+                },
+                "title": {
+                  "type": "string",
+                  "description": "字段值渲染值"
+                },
+                "meta": {
+                  "type": "string",
+                  "description": "字段值元信息(json格式)"
+                },
+                "metaString": {
+                  "type": "string",
+                  "description": "字段值元信息(json格式)；若要添加任务附件到文件字段，则需要在 metaString 中填写 `\\\"fileToken\\\":\\\"xxx\\\"`，可调用创建文件上传凭证接口获得"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "历史遗留字段，已弃用"
+                },
+                "thumbUrl": {
+                  "type": "string",
+                  "description": "历史遗留字段, 已弃用"
+                },
+                "thumbnailUrl": {
+                  "type": "string",
+                  "description": "历史遗留字段, 已弃用"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "历史遗留字段, 已弃用"
+                }
+              },
+              "additionalProperties": false,
+              "description": "字段值内容"
+            },
+            "description": "字段值集合"
+          },
+          "addValues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "字段值ID。用于统计, 自动化触发条件作用; 对于成员类型的字段这个值需要填写用户ID, 可以利用通讯录接口响应中的 userId 字段"
+                },
+                "title": {
+                  "type": "string",
+                  "description": "字段值渲染值"
+                },
+                "meta": {
+                  "type": "string",
+                  "description": "字段值元信息(json格式)"
+                },
+                "metaString": {
+                  "type": "string",
+                  "description": "字段值元信息(json格式)；若要添加任务附件到文件字段，则需要在 metaString 中填写 `\\\"fileToken\\\":\\\"xxx\\\"`，可调用创建文件上传凭证接口获得"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "历史遗留字段，已弃用"
+                },
+                "thumbUrl": {
+                  "type": "string",
+                  "description": "历史遗留字段, 已弃用"
+                },
+                "thumbnailUrl": {
+                  "type": "string",
+                  "description": "历史遗留字段, 已弃用"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "历史遗留字段, 已弃用"
+                }
+              },
+              "additionalProperties": false,
+              "description": "字段值内容"
+            },
+            "description": "新增的字段值列表"
+          },
+          "delValues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "字段值ID。用于统计, 自动化触发条件作用; 对于成员类型的字段这个值需要填写用户ID, 可以利用通讯录接口响应中的 userId 字段"
+                },
+                "title": {
+                  "type": "string",
+                  "description": "字段值渲染值"
+                },
+                "meta": {
+                  "type": "string",
+                  "description": "字段值元信息(json格式)"
+                },
+                "metaString": {
+                  "type": "string",
+                  "description": "字段值元信息(json格式)"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "历史遗留字段，已弃用"
+                },
+                "thumbUrl": {
+                  "type": "string",
+                  "description": "历史遗留字段, 已弃用"
+                },
+                "thumbnailUrl": {
+                  "type": "string",
+                  "description": "历史遗留字段, 已弃用"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "历史遗留字段, 已弃用"
+                }
+              },
+              "additionalProperties": false,
+              "description": "字段值内容"
+            },
+            "description": "移除的字段值列表"
+          }
+        },
+        "additionalProperties": false,
+        "description": "修改自定义字段请求"
+      }
+    },
+    "required": [
+      "taskId"
+    ],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

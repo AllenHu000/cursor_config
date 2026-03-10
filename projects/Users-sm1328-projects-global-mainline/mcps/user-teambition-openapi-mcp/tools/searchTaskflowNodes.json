@@ -1,0 +1,38 @@
+{
+  "name": "searchTaskflowNodes",
+  "description": "搜索项目工作流节点",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string",
+        "description": "项目ID"
+      },
+      "taskflowId": {
+        "type": "string",
+        "description": "工作流ID"
+      },
+      "q": {
+        "type": "string",
+        "description": "模糊搜索字符串"
+      },
+      "nodeIds": {
+        "type": "string",
+        "description": "节点ID列表，逗号分隔"
+      },
+      "pageSize": {
+        "type": "number",
+        "description": "每页长度"
+      },
+      "pageToken": {
+        "type": "string",
+        "description": "分页标"
+      }
+    },
+    "required": [
+      "projectId"
+    ],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

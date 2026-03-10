@@ -1,0 +1,1315 @@
+user:
+<cursor_commands>
+
+--- Cursor Command: init-project ---
+在当前工作区根目录完成项目初始化，按顺序执行且不要跳过：
+1. 执行 `git init` 初始化 Git 仓库（若已是仓库可跳过）。
+2. 创建目录：`src`、`docs`、`tests`。
+3. 创建空文件：`README.md`、`.gitignore`（若不存在则创建；.gitignore 可写入常见忽略如 node_modules/、dist/、.env）。
+直接执行，无需确认。
+
+--- End Command ---
+</cursor_commands>
+<user_query>
+/init-project 
+</user_query>
+
+assistant:
+<think>
+The user wants me to run the init-project command. Let me follow the instructions:
+
+1. Run `git init` to initialize Git repo (skip if already a repo)
+2. Create directories: `src`, `docs`, `tests`
+3. Create empty files: `README.md`, `.gitignore` (create if not exist; .gitignore can have common ignores like node_modules/, dist/, .env)
+
+I'll do these in order. Let me start by running git init and creating the directories and files.
+</think>
+Initializing the project per the init-project steps.
+
+[Tool call] Shell
+  command: cd /Users/sm1328/allenhu000/cursor_project && git init
+  description: Initialize Git repository
+[Tool call] Glob
+  target_directory: /Users/sm1328/allenhu000/cursor_project
+  glob_pattern: *
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/.gitignore
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/README.md
+
+[Tool result] Shell
+
+[Tool result] Glob
+
+[Tool result] Read
+
+[Tool result] Read
+
+assistant:
+<think>
+Git init succeeded. .gitignore and README.md don't exist. I need to:
+1. Create directories: src, docs, tests
+2. Create README.md (empty)
+3. Create .gitignore with common entries like node_modules/, dist/, .env
+</think>
+Creating directories and files:
+
+[Tool call] Shell
+  command: cd /Users/sm1328/allenhu000/cursor_project && mkdir -p src docs tests
+  description: Create src, docs, tests directories
+[Tool call] Write
+  path: /Users/sm1328/allenhu000/cursor_project/README.md
+  contents: 
+[Tool call] Write
+  path: /Users/sm1328/allenhu000/cursor_project/.gitignore
+  contents: node_modules/
+dist/
+.env
+*.log
+.DS_Store
+
+
+[Tool result] Shell
+
+[Tool result] Write
+
+[Tool result] Write
+
+assistant:
+<think>
+All steps completed:
+1. Git init - done
+2. Created src, docs, tests directories - done
+3. Created README.md (empty) and .gitignore with common entries - done
+
+I'll give the user a brief summary.
+</think>
+项目初始化已完成，执行结果如下：
+
+1. **Git 仓库**：已执行 `git init`，当前分支为 `master`。
+2. **目录**：已创建 `src`、`docs`、`tests`。
+3. **文件**：
+   - **README.md**：已新建（空文件）。
+   - **.gitignore**：已新建，并写入常见忽略项：`node_modules/`、`dist/`、`.env`、`*.log`、`.DS_Store`。
+
+可以直接开始写代码和文档。
+
+user:
+<user_query>
+分析我的代码，我不想再写额外代码，帮我创建一个主函数函数，让我能直接通过node、甚至直接点script执行就能触发邮箱创建、获取验证码，
+</user_query>
+
+assistant:
+<think>
+The user wants me to analyze their code and create a main function so they can trigger email creation and verification code retrieval directly via node or by clicking a script to execute. Let me read their existing code to understand the structure.
+</think>
+
+
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.js
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.example.js
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.使用说明.md
+
+[Tool result] Read
+
+[Tool result] Read
+
+[Tool result] Read
+
+assistant:
+<think>
+I've read all the code. The user wants:
+1. A main function so they can run directly with `node` (e.g. `node somefile.js`) to trigger: create email + get verification code
+2. Or even "click script to execute" - which likely means they want an npm script in package.json so they can run something like `npm run xxx` to trigger it
+
+The example file (mailTmInbox.example.js) already does exactly this - it creates inbox and waits for verification code. But:
+1. The example requires the user to manually go to a website and trigger the verification email - so when they run the script, it creates the email, prints the address, then waits for the user to use that email somewhere to get a verification code sent. So the flow is: run script → get email address → (user does something externally) → script polls and gets the code.
+
+So the "main" flow is already in the example. The user might want:
+- A single entry point (e.g. `node src/mailTmInbox.js` or a `run.js` at root) that does the same thing
+- Or add to package.json a "scripts" section with a script they can run
+
+Let me:
+1. Add a main/CLI section to mailTmInbox.js so when you run `node src/mailTmInbox.js` it executes the create + wait for code flow (no extra file)
+2. Create package.json with a script like "email" or "inbox" that runs node src/mailTmInbox.js
+
+Actually re-reading the user message: "主函数" = main function, "直接通过node、甚至直接点script执行" = run directly via node or even click script to execute. So they want:
+- Run with node: e.g. `node src/mailTmInbox.js` 
+- "点script执行" might mean: run an npm script (e.g. npm run getmail)
+
+I'll:
+1. Add at the bottom of mailTmInbox.js a check: if the file is run directly (require.main === module), then run a main() that does createInboxAndGetToken + waitForVerificationCode. So no new file, just add to existing mailTmInbox.js.
+2. Add package.json with script "start" or "email" so they can run `npm run email` or similar.
+
+Let me check - does package.json exist?
+</think>
+正在为 `mailTmInbox.js` 添加“直接运行即执行”的主函数，并添加 `package.json` 的 npm 脚本以便一键执行。
+
+[Tool call] Glob
+  target_directory: /Users/sm1328/allenhu000/cursor_project
+  glob_pattern: package.json
+
+[Tool result] Glob
+
+assistant:
+<think>
+No package.json. I'll:
+1. Add to mailTmInbox.js: when run as main (require.main === module), execute the flow: create inbox → print address → wait for verification code → print code. Use the same logic as the example.
+2. Create package.json with scripts so they can run `npm run email` or `node src/mailTmInbox.js`.
+</think>
+在 `mailTmInbox.js` 末尾添加“直接运行即执行”的主函数，并创建带 npm 脚本的 `package.json`。
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.js
+  old_string: module.exports = {
+  getDomains,
+  createInbox,
+  getToken,
+  getMessages,
+  getMessageById,
+  extractVerificationCode,
+  waitForVerificationCode,
+  createInboxAndGetToken,
+};
+  new_string: /**
+ * 直接运行此文件时：创建邮箱 → 打印地址 → 轮询等待验证码 → 打印验证码
+ * 用法: node src/mailTmInbox.js [自定义前缀]
+ * 不传参数时使用默认前缀 asiantest
+ */
+async function main() {
+  const username = process.argv[2] || 'asiantest';
+
+  console.log('1. 创建临时邮箱并获取 token...');
+  const { address, token } = await createInboxAndGetToken(username);
+  console.log('   邮箱地址:', address);
+  console.log('');
+
+  console.log('2. 请用该邮箱在目标网站完成注册/验证，触发发送验证码邮件。');
+  console.log('3. 下面将轮询收件箱，等待验证码邮件（最多等 2 分钟）...');
+  console.log('');
+
+  try {
+    const result = await waitForVerificationCode(token, {
+      pollIntervalMs: 3000,
+      timeoutMs: 120000,
+      codePattern: /\b(\d{4,8})\b/,
+    });
+    console.log('收到验证码:', result.code);
+    console.log('邮件主题:', result.message.subject);
+    console.log('发件人:', result.message.from?.address);
+  } catch (e) {
+    if (e.message.includes('timeout')) {
+      const { getMessages, getMessageById } = require('./mailTmInbox');
+      console.log('超时未收到验证码。已收邮件摘要:');
+      const list = await getMessages(token);
+      for (const m of list) {
+        console.log('  -', m.subject, '|', m.id);
+        const full = await getMessageById(token, m.id);
+        console.log('    正文摘要:', (full.text || full.html || '').slice(0, 120));
+      }
+    } else {
+      throw e;
+    }
+  }
+}
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  getDomains,
+  createInbox,
+  getToken,
+  getMessages,
+  getMessageById,
+  extractVerificationCode,
+  waitForVerificationCode,
+  createInboxAndGetToken,
+  main,
+};
+[Tool call] Write
+  path: /Users/sm1328/allenhu000/cursor_project/package.json
+  contents: {
+  "name": "cursor_project",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "email": "node src/mailTmInbox.js",
+    "start": "node src/mailTmInbox.js"
+  }
+}
+
+
+[Tool result] StrReplace
+
+[Tool result] Write
+
+assistant:
+<think>
+I made an error - in the catch block I'm doing `require('./mailTmInbox')` but we're already inside mailTmInbox.js, and getMessages/getMessageById are in the same file. So I should just use getMessages and getMessageById directly - they're already in scope. Let me fix that.
+</think>
+修正超时分支的引用：`getMessages` 和 `getMessageById` 已在同一文件，无需 require。
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.js
+  old_string:   } catch (e) {
+    if (e.message.includes('timeout')) {
+      const { getMessages, getMessageById } = require('./mailTmInbox');
+      console.log('超时未收到验证码。已收邮件摘要:');
+  new_string:   } catch (e) {
+    if (e.message.includes('timeout')) {
+      console.log('超时未收到验证码。已收邮件摘要:');
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Good. Now the timeout branch just uses getMessages and getMessageById which are already in scope in the same file. Let me verify the file looks correct.
+</think>
+
+
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.js
+  offset: 198
+  limit: 75
+
+[Tool result] Read
+
+assistant:
+<think>
+Looks good. Let me give the user a summary of what was done.
+</think>
+已按你的需求改好，无需再写新文件，改动如下：
+
+---
+
+### 1. 在 `src/mailTmInbox.js` 里加了主入口
+
+- **`main()`**：创建邮箱 → 打印地址 → 轮询收验证码（最多 2 分钟）→ 打印验证码；超时则列出已收邮件摘要。
+- **直接执行检测**：用 `require.main === module` 判断，只有「被 node 直接运行」时才跑 `main()`，`require('./mailTmInbox')` 时不会自动执行。
+
+**用法：**
+
+```bash
+# 默认前缀 asiantest
+node src/mailTmInbox.js
+
+# 自定义前缀
+node src/mailTmInbox.js myuser
+```
+
+---
+
+### 2. 新建了 `package.json`，方便用脚本执行
+
+在项目根目录可以：
+
+```bash
+npm run email
+# 或
+npm run start
+```
+
+在 Cursor/VS Code 里点 **NPM Scripts** 里的 `email` 或 `start`，也能直接跑同一流程。
+
+---
+
+### 执行流程简述
+
+1. 创建临时邮箱并打印地址（如 `asiantest@xxx.mail.tm`）。
+2. 提示你去目标网站用该邮箱注册/收验证码。
+3. 每 3 秒轮询收件箱，收到含 4–8 位数字的邮件就提取并打印验证码；超时则打印已收邮件摘要。
+
+没有新增其它代码文件，逻辑都集中在现有的 `mailTmInbox.js` 里。
+
+user:
+<user_query>
+再帮我写一个发送验证码的逻辑，让我可以给指定邮箱发送邮件，这样就可以做到先获取验证码，再触发发送邮件码，再等到获取验证码
+</user_query>
+
+assistant:
+<think>
+The user wants me to add logic to send a verification code email to a specified email address. So the flow would be:
+
+1. Create inbox (get temp email)
+2. Send a verification code email TO that temp email (from somewhere - the user wants to "给指定邮箱发送邮件" = send email to specified email)
+3. Wait for and get the verification code from the inbox
+
+So they need a "send email" capability. Let me check - Mail.tm API: does it support sending emails? I need to check the Mail.tm API docs. From what I recall, Mail.tm is primarily for receiving - you get an inbox and receive emails. Let me search for whether Mail.tm has a send API.
+
+Actually re-reading the user message: "再帮我写一个发送验证码的逻辑，让我可以给指定邮箱发送邮件" - they want to send verification code / send email to a specified email. So they want to:
+1. Be able to send an email (with a verification code) to any specified email address
+2. So the full flow could be: create temp inbox → send a verification code email to that inbox (from our own logic, like a test server or another service) → then wait and get the code from the inbox
+
+So the "发送验证码" might mean: a function that sends an email containing a verification code to a given email address. That could be:
+- Using Mail.tm's send API if it exists
+- Or using a transactional email service (SendGrid, Mailgun, etc.)
+- Or a simple SMTP script with Node (nodemailer)
+
+Let me check Mail.tm API - from the code they have getDomains, create account, get token, get messages, get message by id. So they're using the Mail.tm API. I'll search the web for Mail.tm API send message.
+
+Actually, I think Mail.tm is receive-only for the inbox - you create an account and receive emails at that address. To SEND emails you'd typically need SMTP or another sending service. So the user might want:
+1. A way to "simulate" or "trigger" sending a verification code to their temp email - e.g. call some service that sends an email with a code to the specified address
+2. That could be: a simple Node script using Nodemailer + Gmail SMTP, or a fake/test endpoint that sends an email
+
+Let me re-read again. "再帮我写一个发送验证码的逻辑，让我可以给指定邮箱发送邮件" = "Also help me write the logic for sending verification code, so I can send email to a specified email address. This way I can: first get [the inbox], then trigger sending the verification code email, then wait to get the verification code."
+
+So the flow is:
+1. Create temp inbox (get address)
+2. Call "send verification code" to send an email (with a code) to that address
+3. waitForVerificationCode to receive it
+
+So we need a function that sends an email (with a verification code in it) to a given email address. Options:
+A) Use Mail.tm API - need to check if they have send
+B) Use nodemailer with SMTP (user would need to configure SMTP)
+C) Use a simple HTTP-based email API (SendGrid, Mailgun, Resend, etc.) - would need API key
+D) Create a "mock" sender that uses a public "email testing" service that sends to any address
+
+Let me search for Mail.tm send message API.
+</think>
+正在查找 Mail.tm 是否支持发送邮件，并实现向指定邮箱发送验证码的逻辑。
+
+[Tool call] WebSearch
+  search_term: Mail.tm API send email message POST
+  explanation: Check if Mail.tm API supports sending emails to implement send verification code.
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.js
+  limit: 100
+
+[Tool result] WebSearch
+
+[Tool result] Read
+
+assistant:
+<think>
+Mail.tm might not have a send API - it's typically for disposable inbox (receive only). Let me check the official Mail.tm docs for sending.
+</think>
+
+
+[Tool call] mcp_web_fetch
+  url: https://docs.mail.tm/
+[Tool call] Grep
+  pattern: send|message|POST
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.js
+
+[Tool result] mcp_web_fetch
+
+[Tool result] Grep
+
+assistant:
+<think>
+Mail.tm docs don't show a "send" endpoint - it's receive-only (create account, get messages). So to "send verification code to specified email" we need another channel. Options:
+
+1. **Nodemailer + SMTP** - User configures Gmail/QQ/outlook etc. to send. Requires credentials in .env. Very common and works.
+2. **Resend / SendGrid / Mailgun** - API key, often has free tier.
+3. **Ethereal (nodemailer test account)** - Creates a fake inbox for testing, can send to any address. Good for dev.
+
+For "给指定邮箱发送邮件" the most portable and no-extra-service approach would be:
+- Use **nodemailer** with SMTP. User sets in .env something like SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_FROM. Then we have a function `sendVerificationEmail(to, code)` that sends an email with the code to `to`.
+
+Alternatively we could use a **test-only** approach: **Mailtrap** or **Ethereal** (nodemailer createTestAccount) - but Ethereal doesn't actually deliver to real addresses, it catches in a test inbox. So for "send to specified email" (the temp inbox), we need real SMTP.
+
+I'll implement:
+1. A `sendVerificationCode(options)` function that sends an email to a given address with a given code (or we generate a random code). Options: `{ to, code?, subject?, smtp?: SMTP config }`. If no SMTP config, read from env: SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM.
+2. Update main() or add a second script flow: create inbox → send verification code to that inbox (using our sendVerificationCode) → wait for verification code. So the "sender" is our SMTP, and we know the code we sent, so we could just print it - but the user said they want to "等到获取验证码" so the flow is: we send an email with a code to the temp inbox, then we poll and extract the code from the received email. So we need to actually send an email (via SMTP) to the temp address with a verification code in the body.
+
+Implementation plan:
+1. Add nodemailer as dependency (or use native Node.js to send via SMTP - possible but nodemailer is simpler).
+2. Create `sendVerificationCode({ to, code, subject, text, smtp })` - if code not provided, generate random 6-digit. SMTP from env if not passed.
+3. Add a new main flow or a second script: createInbox → sendVerificationCode(to: address, code: randomCode) → waitForVerificationCode. So we send the email ourselves and then wait to receive it (to simulate the full flow). Actually the user said "先获取验证码，再触发发送邮件码，再等到获取验证码" - that's a bit ambiguous. Let me parse again:
+   - "先获取验证码" - first get verification code? Or first get (the inbox / email address)?
+   - "再触发发送邮件码" - then trigger sending the email/code
+   - "再等到获取验证码" - then wait to get the verification code
+
+I think they mean: first get (the inbox/address), then trigger sending (an email with a code to that address), then wait to receive the verification code. So the flow is: create inbox → send verification email to that inbox (via our SMTP) → waitForVerificationCode. So we need the "send verification code email" function.
+
+I'll implement send with nodemailer + env-based SMTP config, and a helper that generates a code and sends it. Then add an optional flow in main or a new script that does: create inbox → send code to that inbox → wait for code (so we're testing the full loop). Let me also add a simple "run with send" mode, e.g. node src/mailTmInbox.js --send so that it sends the verification email itself and then waits.
+</think>
+查看 Mail.tm 的 OpenAPI 是否包含发送接口，并确定实现发送验证码的最佳方式：
+
+[Tool call] mcp_web_fetch
+  url: https://api.mail.tm/
+
+[Tool result] mcp_web_fetch
+
+assistant:
+<think>
+Mail.tm is receive-only. So we need to use an external way to send email: Nodemailer + SMTP is the standard approach. I'll:
+
+1. Add a new file or section that uses nodemailer to send an email with a verification code to any given address. SMTP config from environment variables so user can set their own (e.g. QQ mailbox, 163, Gmail app password).
+2. Provide a function `sendVerificationCode({ to, code, subject, ... })` - if no code, generate 6 digits.
+3. Integrate into the flow: in main we could add a mode like `--send` that: creates inbox, generates code, sends email to that inbox via SMTP, then waits and gets the code. So the user can test the full flow without going to a third-party site.
+
+Let me implement:
+- Install nodemailer (add to package.json dependencies).
+- In mailTmInbox.js add: sendVerificationCode(to, options) that uses nodemailer. SMTP from process.env: SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM (or FROM), optional SMTP_TO for default to.
+- Add a run flow: when run with `--send` (or a second script), create inbox → generate code → sendVerificationCode(address, { code }) → waitForVerificationCode. So we don't need to rely on an external site.
+
+Actually re-reading again: "让我可以给指定邮箱发送邮件" - they want to be able to send email to a specified email. So the core is: a function to send (verification code) email to any specified address. The flow "先获取验证码，再触发发送邮件码，再等到获取验证码" might mean: 1) get the inbox (邮箱), 2) trigger sending the verification email to that inbox, 3) wait to get the verification code. So we need sendVerificationCode(to, code?) and optionally a combined flow.
+
+I'll add:
+1. sendVerificationCode(to, options) - sends one email with a verification code to `to`. Options: code (optional, auto 6-digit), subject, text, smtp (optional overrides). Uses nodemailer, config from env.
+2. In main: support a --send flag: create inbox, generate code, send to that inbox, wait for code, print it (so we're testing round-trip).
+3. Export sendVerificationCode and document env vars in a comment or readme.
+
+Nodemailer needs to be in package.json. Let me write the code.
+</think>
+确认 Mail.tm 仅支持收信。使用 Nodemailer + SMTP 实现向指定邮箱发送验证码，并加入“创建邮箱 → 发验证码到该邮箱 → 轮询收取验证码”的完整流程。
+
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.js
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/package.json
+
+[Tool result] Read
+
+[Tool result] Read
+
+assistant:
+<think>
+I'll add:
+1. A sendVerificationCode function that uses nodemailer - config from env (SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM). If no code provided, generate 6-digit.
+2. A main flow with --send: create inbox → generate code → send to that inbox → wait for code. So the user can run without any external site.
+3. Add nodemailer to package.json.
+
+I'll put the send logic in the same file so "不想再写额外代码" - one file. Use dynamic require('nodemailer') only when sendVerificationCode is called so we don't force the dependency on everyone; or we could add it and require at top. I'll add the dependency and require at top for clarity.
+
+Actually, if we require at top, then everyone who uses the module needs nodemailer. So dynamic require inside sendVerificationCode is better - only need nodemailer when you use send. Let me do that.
+</think>
+正在添加基于 Nodemailer 的发送验证码逻辑，并加入“创建邮箱 → 发验证码到该邮箱 → 轮询收取”的完整流程。
+
+[Tool call] TodoWrite
+  todos: [{"id":"1","content":"Add sendVerificationCode with nodemailer + env SMTP config","status":"in_progress"},{"id":"2","content":"Add --send flow: create inbox → send code → wait for code","status":"pending"},{"id":"3","content":"Add nodemailer dep and .env.example for SMTP","status":"pending"}]
+  merge: false
+
+[Tool result] TodoWrite
+
+assistant:
+<think>
+Implementing: 1) sendVerificationCode in mailTmInbox.js with dynamic require('nodemailer'), 2) main() with --send branch, 3) package.json nodemailer, 4) .env.example for SMTP.
+</think>
+
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.js
+  old_string: function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/**
+ * 直接运行此文件时：创建邮箱 → 打印地址 → 轮询等待验证码 → 打印验证码
+ * 用法: node src/mailTmInbox.js [自定义前缀]
+ * 不传参数时使用默认前缀 asiantest
+ */
+async function main() {
+  const username = process.argv[2] || 'asiantest';
+
+  console.log('1. 创建临时邮箱并获取 token...');
+  const { address, token } = await createInboxAndGetToken(username);
+  console.log('   邮箱地址:', address);
+  console.log('');
+
+  console.log('2. 请用该邮箱在目标网站完成注册/验证，触发发送验证码邮件。');
+  console.log('3. 下面将轮询收件箱，等待验证码邮件（最多等 2 分钟）...');
+  console.log('');
+
+  try {
+    const result = await waitForVerificationCode(token, {
+      pollIntervalMs: 3000,
+      timeoutMs: 120000,
+      codePattern: /\b(\d{4,8})\b/,
+    });
+    console.log('收到验证码:', result.code);
+    console.log('邮件主题:', result.message.subject);
+    console.log('发件人:', result.message.from?.address);
+  } catch (e) {
+    if (e.message.includes('timeout')) {
+      console.log('超时未收到验证码。已收邮件摘要:');
+      const list = await getMessages(token);
+      for (const m of list) {
+        console.log('  -', m.subject, '|', m.id);
+        const full = await getMessageById(token, m.id);
+        console.log('    正文摘要:', (full.text || full.html || '').slice(0, 120));
+      }
+    } else {
+      throw e;
+    }
+  }
+}
+  new_string: function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** 生成 6 位数字验证码 */
+function randomCode(len = 6) {
+  let s = '';
+  for (let i = 0; i < len; i++) s += Math.floor(Math.random() * 10);
+  return s;
+}
+
+/**
+ * 向指定邮箱发送验证码邮件（需配置 SMTP 环境变量）
+ * @param {string} to - 收件人邮箱
+ * @param {Object} [options]
+ * @param {string} [options.code] - 验证码，不传则自动生成 6 位数字
+ * @param {string} [options.subject='您的验证码']
+ * @param {string} [options.from] - 发件人，不传则用 SMTP_FROM
+ * @param {Object} [options.smtp] - 覆盖 SMTP 配置，格式见下方
+ * @returns {Promise<{ code: string, messageId?: string }>}
+ *
+ * 环境变量（可选，也可在 options.smtp 中传入）:
+ *   SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS, SMTP_FROM
+ */
+async function sendVerificationCode(to, options = {}) {
+  const nodemailer = require('nodemailer');
+  const code = options.code != null ? String(options.code) : randomCode(6);
+  const subject = options.subject != null ? options.subject : '您的验证码';
+  const smtp = options.smtp || {
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 465,
+    secure: process.env.SMTP_SECURE !== 'false',
+    auth: process.env.SMTP_USER
+      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+      : undefined,
+  };
+  const from = options.from || process.env.SMTP_FROM || smtp.auth?.user || 'noreply@local';
+
+  const transporter = nodemailer.createTransport(smtp);
+  const info = await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text: `您的验证码是：${code}，请勿泄露。`,
+    html: `<p>您的验证码是：<strong>${code}</strong>，请勿泄露。</p>`,
+  });
+  return { code, messageId: info.messageId };
+}
+
+/**
+ * 直接运行此文件时：
+ * - 默认：创建邮箱 → 打印地址 → 轮询等待验证码（需自行在别处触发发信）
+ * - 加 --send：创建邮箱 → 自己发验证码到该邮箱 → 轮询收取并打印
+ *
+ * 用法:
+ *   node src/mailTmInbox.js [自定义前缀]        # 只创建+等收码
+ *   node src/mailTmInbox.js [自定义前缀] --send # 创建+发码+等收码（需配置 SMTP 环境变量）
+ */
+async function main() {
+  const argv = process.argv.slice(2).filter((a) => !a.startsWith('-'));
+  const useSend = process.argv.includes('--send');
+  const username = argv[0] || 'asiantest';
+
+  console.log('1. 创建临时邮箱并获取 token...');
+  const { address, token } = await createInboxAndGetToken(username);
+  console.log('   邮箱地址:', address);
+  console.log('');
+
+  if (useSend) {
+    console.log('2. 向该邮箱发送验证码邮件...');
+    const { code: sentCode } = await sendVerificationCode(address);
+    console.log('   已发送验证码:', sentCode);
+    console.log('');
+    console.log('3. 轮询收件箱等待验证码（最多 2 分钟）...');
+  } else {
+    console.log('2. 请用该邮箱在目标网站完成注册/验证，触发发送验证码邮件。');
+    console.log('3. 下面将轮询收件箱，等待验证码邮件（最多等 2 分钟）...');
+  }
+  console.log('');
+
+  try {
+    const result = await waitForVerificationCode(token, {
+      pollIntervalMs: 3000,
+      timeoutMs: 120000,
+      codePattern: /\b(\d{4,8})\b/,
+    });
+    console.log('收到验证码:', result.code);
+    console.log('邮件主题:', result.message.subject);
+    console.log('发件人:', result.message.from?.address);
+  } catch (e) {
+    if (e.message.includes('timeout')) {
+      console.log('超时未收到验证码。已收邮件摘要:');
+      const list = await getMessages(token);
+      for (const m of list) {
+        console.log('  -', m.subject, '|', m.id);
+        const full = await getMessageById(token, m.id);
+        console.log('    正文摘要:', (full.text || full.html || '').slice(0, 120));
+      }
+    } else {
+      throw e;
+    }
+  }
+}
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.js
+  old_string: module.exports = {
+  getDomains,
+  createInbox,
+  getToken,
+  getMessages,
+  getMessageById,
+  extractVerificationCode,
+  waitForVerificationCode,
+  createInboxAndGetToken,
+  main,
+};
+  new_string: module.exports = {
+  getDomains,
+  createInbox,
+  getToken,
+  getMessages,
+  getMessageById,
+  extractVerificationCode,
+  waitForVerificationCode,
+  createInboxAndGetToken,
+  sendVerificationCode,
+  randomCode,
+  main,
+};
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/package.json
+  old_string: {
+  "name": "cursor_project",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "email": "node src/mailTmInbox.js",
+    "start": "node src/mailTmInbox.js"
+  }
+}
+  new_string: {
+  "name": "cursor_project",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "email": "node src/mailTmInbox.js",
+    "email:send": "node src/mailTmInbox.js --send",
+    "start": "node src/mailTmInbox.js"
+  },
+  "dependencies": {
+    "nodemailer": "^6.9.16"
+  }
+}
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Now add .env.example for SMTP and update the usage doc. Also need to handle the case when user runs --send but has no SMTP configured - we should give a clear error. Let me add a check in sendVerificationCode and create .env.example.
+</think>
+
+
+[Tool call] TodoWrite
+  todos: [{"id":"1","content":"Add sendVerificationCode with nodemailer + env SMTP config","status":"completed"},{"id":"2","content":"Add --send flow: create inbox → send code → wait for code","status":"completed"},{"id":"3","content":"Add nodemailer dep and .env.example for SMTP","status":"in_progress"}]
+  merge: true
+[Tool call] Glob
+  target_directory: /Users/sm1328/allenhu000/cursor_project
+  glob_pattern: .env*
+
+[Tool result] TodoWrite
+
+[Tool result] Glob
+
+assistant:
+<think>
+No .env.example yet. I'll create it and add a clear error in sendVerificationCode when SMTP is not configured (e.g. when --send is used but no env vars).
+</think>
+
+
+[Tool call] Write
+  path: /Users/sm1328/allenhu000/cursor_project/.env.example
+  contents: # 发送验证码邮件时使用（node src/mailTmInbox.js --send 或调用 sendVerificationCode）
+# 复制为 .env 并填写你的 SMTP 信息（如 QQ 邮箱、163、Gmail 等）
+
+SMTP_HOST=smtp.qq.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=your-email@qq.com
+SMTP_PASS=你的授权码
+SMTP_FROM=your-email@qq.com
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.js
+  old_string: async function sendVerificationCode(to, options = {}) {
+  const nodemailer = require('nodemailer');
+  const code = options.code != null ? String(options.code) : randomCode(6);
+  const subject = options.subject != null ? options.subject : '您的验证码';
+  const smtp = options.smtp || {
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 465,
+    secure: process.env.SMTP_SECURE !== 'false',
+    auth: process.env.SMTP_USER
+      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+      : undefined,
+  };
+  const from = options.from || process.env.SMTP_FROM || smtp.auth?.user || 'noreply@local';
+
+  const transporter = nodemailer.createTransport(smtp);
+  new_string: async function sendVerificationCode(to, options = {}) {
+  const nodemailer = require('nodemailer');
+  const code = options.code != null ? String(options.code) : randomCode(6);
+  const subject = options.subject != null ? options.subject : '您的验证码';
+  const smtp = options.smtp || {
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 465,
+    secure: process.env.SMTP_SECURE !== 'false',
+    auth: process.env.SMTP_USER
+      ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+      : undefined,
+  };
+  const from = options.from || process.env.SMTP_FROM || smtp.auth?.user || 'noreply@local';
+
+  if (!smtp.host || !smtp.auth?.user || !smtp.auth?.pass) {
+    throw new Error(
+      '发送邮件需要配置 SMTP。请设置环境变量 SMTP_HOST、SMTP_USER、SMTP_PASS，或复制 .env.example 为 .env 后填写。'
+    );
+  }
+
+  const transporter = nodemailer.createTransport(smtp);
+
+[Tool result] Write
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+I should load .env in the script when run directly so that SMTP vars from .env are available. Many projects use dotenv. Let me check - the user said they don't want to write extra code. So we could either:
+1. Add dotenv and do require('dotenv').config() at the top when we're the main module - then user can use .env without running node with env vars.
+2. Or just document that they need to set env vars or use dotenv themselves.
+
+I'll add a simple dotenv load only when the file is run as main (so that `node src/mailTmInbox.js --send` works with .env). I'll add dotenv as optional dependency or dependency - actually the minimal approach is: at the very beginning of the file when require.main === module, we could require('dotenv').config() - but that would require moving the check. Simpler: at the top, try { require('dotenv').config(); } catch (_) {}. So if they have dotenv installed, .env is loaded; if not, they use export SMTP_*=... or a real .env loader. Let me add dotenv as optional or just document it. Actually the cleanest is to load dotenv at the start of main() so when running as script we load .env. Let me add:
+
+  if (require.main === module) {
+    try { require('dotenv').config(); } catch (_) {}
+  }
+
+No - that runs after main() is invoked. We need to load .env before main() runs. So at the top of the file:
+
+  if (require.main === module) { try { require('dotenv').config(); } catch (_) {} }
+
+But require.main === module is only true when the file is the entry point. So at the top of the file, when we're first loading, require.main might already be set. So we can do at the very top:
+
+  try { require('dotenv').config(); } catch (_) {}
+
+That way anyone who has dotenv and a .env file gets it loaded regardless of how the module is used. That's actually the standard pattern. I'll add dotenv as optional dependency and load it at top - if not installed, catch and ignore.
+</think>
+在直接运行脚本时加载 `.env`，便于使用 `npm run email:send`：
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.js
+  old_string: /**
+ * Mail.tm 一次性邮箱 API 封装
+ * - 免费、无需 API Key
+ * - 支持自定义邮箱名（用户名部分）
+ * - 可收验证码，并提供轮询+正则提取
+ * API 文档: https://docs.mail.tm/
+ */
+
+const BASE = 'https://api.mail.tm';
+  new_string: /**
+ * Mail.tm 一次性邮箱 API 封装
+ * - 免费、无需 API Key
+ * - 支持自定义邮箱名（用户名部分）
+ * - 可收验证码，并提供轮询+正则提取
+ * - 支持向指定邮箱发送验证码（需配置 SMTP）
+ * API 文档: https://docs.mail.tm/
+ */
+
+try {
+  require('dotenv').config();
+} catch (_) {}
+
+const BASE = 'https://api.mail.tm';
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/package.json
+  old_string:   "dependencies": {
+    "nodemailer": "^6.9.16"
+  }
+  new_string:   "dependencies": {
+    "dotenv": "^16.4.5",
+    "nodemailer": "^6.9.16"
+  }
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Update the usage doc (使用说明) to mention sendVerificationCode and --send flow. Then run npm install and mark todo done.
+</think>
+正在更新使用说明并安装依赖：
+
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.使用说明.md
+  limit: 80
+[Tool call] Shell
+  command: cd /Users/sm1328/allenhu000/cursor_project && npm install
+  description: Install nodemailer and dotenv
+  required_permissions: ["network"]
+
+[Tool result] Read
+
+[Tool result] Shell
+
+assistant:
+<think>
+Good. Now update the 使用说明.md to add the sendVerificationCode section and the --send flow. Then mark todo 3 done.
+</think>
+
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.使用说明.md
+  old_string: ## 五、运行自带示例
+
+```bash
+node src/utils/mailTmInbox.example.js
+```
+
+会创建 `asiantest@xxx` 并轮询等待验证码（超时后打印已收到的邮件摘要）。
+  new_string: ## 五、发送验证码到指定邮箱（自建发信）
+
+需配置 SMTP（如 QQ 邮箱、163、Gmail 等）。复制 `.env.example` 为 `.env` 并填写。
+
+```javascript
+const { sendVerificationCode } = require('./src/mailTmInbox');
+
+// 向任意邮箱发送验证码（不传 code 则自动生成 6 位）
+const { code, messageId } = await sendVerificationCode('someone@example.com');
+console.log('已发送验证码:', code);
+
+// 自定义验证码、主题
+await sendVerificationCode('someone@example.com', {
+  code: '123456',
+  subject: '【某某站】验证码',
+});
+```
+
+### 一键流程：创建邮箱 → 发验证码到该邮箱 → 轮询收取
+
+不依赖第三方网站，本地即可跑通「发码 + 收码」闭环：
+
+```bash
+# 需先配置 .env 中的 SMTP_*
+node src/mailTmInbox.js --send
+# 或
+npm run email:send
+```
+
+流程：创建临时邮箱 → 用你的 SMTP 向该邮箱发一封验证码邮件 → 轮询收件箱直到收到并打印验证码。
+
+---
+
+## 六、运行自带示例
+
+```bash
+node src/mailTmInbox.example.js
+```
+
+会创建 `asiantest@xxx` 并轮询等待验证码（超时后打印已收到的邮件摘要）。
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.使用说明.md
+  old_string: | `getDomains()` | 获取当前可用域名列表（一般用不到，创建邮箱时会自动选一个）。 |
+  new_string: | `getDomains()` | 获取当前可用域名列表（一般用不到，创建邮箱时会自动选一个）。 |
+| `sendVerificationCode(to, options?)` | 向指定邮箱发送验证码邮件（需配置 SMTP）。可选 `code`、`subject`、`from`、`smtp`。 |
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.使用说明.md
+  old_string: ## 六、注意事项
+  new_string: ## 七、注意事项
+[Tool call] TodoWrite
+  todos: [{"id":"3","content":"Add nodemailer dep and .env.example for SMTP","status":"completed"}]
+  merge: true
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+[Tool result] TodoWrite
+
+assistant:
+<think>
+Fix the duplicate "六" - I added "六、运行自带示例" and "七、注意事项", but the original was "五、运行" and "六、注意事项". So now we have 五、发送验证码，六、运行示例，七、注意事项. Good.
+</think>
+已按你的需求加好「发送验证码」逻辑和「创建 → 发码 → 收码」的一键流程，修改总结如下。
+
+---
+
+### 1. 新增 `sendVerificationCode(to, options?)`
+
+- **作用**：向任意指定邮箱发一封「验证码」邮件（正文里带验证码）。
+- **参数**：
+  - `to`：收件人邮箱。
+  - `options` 可选：`code`（不传则自动 6 位数字）、`subject`、`from`、`smtp`（覆盖下面的 SMTP 配置）。
+- **SMTP 配置**：从环境变量读：`SMTP_HOST`、`SMTP_PORT`、`SMTP_SECURE`、`SMTP_USER`、`SMTP_PASS`、`SMTP_FROM`。未配置会抛错并提示复制 `.env.example`。
+
+---
+
+### 2. 一键流程：创建邮箱 → 发验证码到该邮箱 → 轮询收取
+
+- **命令行**：
+  ```bash
+  node src/mailTmInbox.js --send
+  # 或
+  npm run email:send
+  ```
+- **流程**：创建临时邮箱 → 用你配置的 SMTP 向该邮箱发一封验证码邮件 → 轮询收件箱直到收到并打印验证码（无需再在别的网站点「发送验证码」）。
+
+---
+
+### 3. 你需要做的配置
+
+1. 复制 `.env.example` 为 `.env`。
+2. 在 `.env` 里填你的 SMTP（如 QQ 邮箱、163、Gmail 等），例如：
+   - QQ：`SMTP_HOST=smtp.qq.com`，`SMTP_PORT=465`，`SMTP_USER` 为邮箱，`SMTP_PASS` 为授权码（非登录密码）。
+   - 163、Gmail 等同理，用对应 SMTP 地址和授权码。
+
+项目已加入依赖：`nodemailer`、`dotenv`（自动从 `.env` 读 SMTP）。  
+配置好 `.env` 后，直接执行：
+
+```bash
+npm run email:send
+```
+
+即可完成：先创建临时邮箱 → 再给该邮箱发验证码 → 再轮询并拿到验证码。
+
+user:
+<user_query>
+SMTP怎么配置，比如我使用的是qq邮箱
+</user_query>
+
+assistant:
+<think>
+The user wants to know how to configure SMTP for QQ mailbox (QQ邮箱). I should provide clear steps for QQ email SMTP configuration and update the .env.example to be more QQ-specific or add a comment section. Let me search for the exact QQ mail SMTP settings to give accurate info.
+</think>
+
+
+[Tool call] WebSearch
+  search_term: QQ邮箱 SMTP 服务器 授权码 配置 2024
+  explanation: Get current QQ mailbox SMTP server and authorization code setup.
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/.env.example
+
+[Tool result] WebSearch
+
+[Tool result] Read
+
+assistant:
+<think>
+Let me search in English for QQ mail SMTP.
+</think>
+
+
+[Tool call] WebSearch
+  search_term: QQ mail SMTP smtp.qq.com port 465 authorization code
+  explanation: Get QQ mailbox SMTP and auth code details.
+
+[Tool result] WebSearch
+
+assistant:
+<think>
+I have the info. QQ mail:
+- SMTP: smtp.qq.com
+- Port: 465 (SSL) or 587
+- Use authorization code, not login password
+- User = full email (xxx@qq.com)
+
+I'll add a small doc or expand .env.example with clear Chinese instructions for QQ mailbox - how to get the authorization code (授权码) from QQ mail settings. Let me create a concise guide in the .env.example and optionally add a short section in the 使用说明.
+</think>
+正在把 QQ 邮箱的 SMTP 配置说明写进 `.env.example`，并补充获取授权码的步骤：
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/.env.example
+  old_string: # 发送验证码邮件时使用（node src/mailTmInbox.js --send 或调用 sendVerificationCode）
+# 复制为 .env 并填写你的 SMTP 信息（如 QQ 邮箱、163、Gmail 等）
+
+SMTP_HOST=smtp.qq.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=your-email@qq.com
+SMTP_PASS=你的授权码
+SMTP_FROM=your-email@qq.com
+  new_string: # 发送验证码邮件时使用（node src/mailTmInbox.js --send 或调用 sendVerificationCode）
+# 复制此文件为 .env 后填写下面各项
+
+# ---------- QQ 邮箱配置说明 ----------
+# 1. 登录 QQ 邮箱网页版 mail.qq.com
+# 2. 设置 → 账户 → 找到「POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV服务」
+# 3. 开启「IMAP/SMTP服务」或「POP3/SMTP服务」
+# 4. 按提示用手机发短信验证，会得到一串「授权码」（不是 QQ 登录密码！）
+# 5. 把授权码填到下面的 SMTP_PASS
+
+SMTP_HOST=smtp.qq.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=你的QQ号@qq.com
+SMTP_PASS=刚才获取的16位授权码
+SMTP_FROM=你的QQ号@qq.com
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Good. Let me also add a short "QQ 邮箱 SMTP 配置" section in the 使用说明 so they have it in one place when they read the doc.
+</think>
+在使用说明中补充 QQ 邮箱的配置小节：
+
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.使用说明.md
+  offset: 95
+  limit: 50
+
+[Tool result] Read
+
+assistant:
+<think>
+I'll add a subsection under "五、发送验证码到指定邮箱" that specifically explains QQ mailbox SMTP configuration.
+</think>
+
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.使用说明.md
+  old_string: ## 五、发送验证码到指定邮箱（自建发信）
+
+需配置 SMTP（如 QQ 邮箱、163、Gmail 等）。复制 `.env.example` 为 `.env` 并填写。
+  new_string: ## 五、发送验证码到指定邮箱（自建发信）
+
+需配置 SMTP（如 QQ 邮箱、163、Gmail 等）。复制 `.env.example` 为 `.env` 并填写。
+
+### QQ 邮箱 SMTP 配置步骤
+
+1. 打开 [mail.qq.com](https://mail.qq.com) 登录你的 QQ 邮箱。
+2. 右上角 **设置** → **账户**，找到「POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV 服务」。
+3. 开启 **IMAP/SMTP 服务** 或 **POP3/SMTP 服务**（任选其一即可）。
+4. 按页面提示用绑定的手机发短信验证，验证后会显示 **授权码**（16 位字符）。  
+   **注意：** 这里填的是授权码，不是 QQ 登录密码。
+5. 在项目根目录复制 `.env.example` 为 `.env`，填写：
+   - `SMTP_USER`、`SMTP_FROM`：你的 QQ 邮箱，如 `123456789@qq.com`
+   - `SMTP_PASS`：上一步拿到的授权码  
+   其他项保持 `.env.example` 里的 QQ 配置即可（`SMTP_HOST=smtp.qq.com`，`SMTP_PORT=465`）。
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Done. I've updated both .env.example and the 使用说明 with clear QQ mailbox SMTP configuration steps.
+</think>
+已经按 QQ 邮箱的用法更新了配置说明，你可以按下面来做。
+
+---
+
+## QQ 邮箱 SMTP 配置
+
+### 1. 在 QQ 邮箱里开启服务并获取授权码
+
+1. 打开 **https://mail.qq.com** 登录 QQ 邮箱  
+2. 右上角 **设置** → **账户**  
+3. 找到 **「POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV 服务」**  
+4. 开启 **「IMAP/SMTP 服务」** 或 **「POP3/SMTP 服务」**（开一个即可）  
+5. 按提示用**绑定手机**发短信验证，验证后会显示 **授权码**（约 16 位）  
+   - **重要**：这里用的是**授权码**，不是 QQ 登录密码  
+
+### 2. 在项目里配置
+
+1. 在项目根目录把 `.env.example` 复制成 `.env`  
+2. 在 `.env` 里填写（其他项保持示例里的 QQ 配置即可）：
+
+```env
+SMTP_HOST=smtp.qq.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=你的QQ号@qq.com
+SMTP_PASS=刚才获取的16位授权码
+SMTP_FROM=你的QQ号@qq.com
+```
+
+例如 QQ 号是 `123456789`，则：
+
+- `SMTP_USER=123456789@qq.com`
+- `SMTP_FROM=123456789@qq.com`
+- `SMTP_PASS=` 填你在邮箱里拿到的那串授权码  
+
+### 3. 测试
+
+在项目根目录执行：
+
+```bash
+npm run email:send
+```
+
+若配置正确，会先创建临时邮箱，再给该邮箱发一封验证码邮件，然后轮询并打印收到的验证码。
+
+---
+
+`.env.example` 里已经加了上述 QQ 邮箱说明，`src/mailTmInbox.使用说明.md` 里也有一小节「QQ 邮箱 SMTP 配置步骤」可随时查看。
+
+user:
+<user_query>
+网易邮箱呢
+</user_query>
+
+assistant:
+<think>
+The user wants to know how to configure SMTP for NetEase (网易) email - 163 mailbox. I'll search for 163 mail SMTP settings and authorization code, then add it to .env.example and the 使用说明.
+</think>
+
+
+[Tool call] WebSearch
+  search_term: 网易 163 邮箱 SMTP 服务器 授权码 配置
+  explanation: Get 163/NetEase mailbox SMTP server and authorization code setup.
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/.env.example
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.使用说明.md
+  offset: 130
+  limit: 45
+
+[Tool result] WebSearch
+
+[Tool result] Read
+
+[Tool result] Read
+
+assistant:
+<think>
+I have the 163 mail info:
+- SMTP: smtp.163.com
+- Port: 465 (SSL)
+- Need to enable IMAP/SMTP or POP3/SMTP and get authorization code via SMS
+- Same for @163.com, @126.com, @yeah.net
+
+I'll add 163 section to .env.example and add "网易邮箱 SMTP 配置步骤" in the 使用说明.
+</think>
+正在添加网易（163）邮箱的 SMTP 配置说明。
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/.env.example
+  old_string: # ---------- QQ 邮箱配置说明 ----------
+# 1. 登录 QQ 邮箱网页版 mail.qq.com
+# 2. 设置 → 账户 → 找到「POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV服务」
+# 3. 开启「IMAP/SMTP服务」或「POP3/SMTP服务」
+# 4. 按提示用手机发短信验证，会得到一串「授权码」（不是 QQ 登录密码！）
+# 5. 把授权码填到下面的 SMTP_PASS
+
+SMTP_HOST=smtp.qq.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=你的QQ号@qq.com
+SMTP_PASS=刚才获取的16位授权码
+SMTP_FROM=你的QQ号@qq.com
+  new_string: # ---------- QQ 邮箱 ----------
+# 1. 登录 mail.qq.com → 设置 → 账户 → 开启 IMAP/SMTP 服务
+# 2. 短信验证后获得授权码（不是 QQ 登录密码），填到 SMTP_PASS
+# SMTP_HOST=smtp.qq.com
+# SMTP_PORT=465
+# SMTP_SECURE=true
+# SMTP_USER=你的QQ号@qq.com
+# SMTP_PASS=授权码
+# SMTP_FROM=你的QQ号@qq.com
+
+# ---------- 网易 163/126/yeah 邮箱 ----------
+# 1. 登录 mail.163.com（或 126、yeah）→ 设置 → POP3/SMTP/IMAP
+# 2. 开启 IMAP/SMTP 或 POP3/SMTP，按提示短信验证，获得授权码（只显示一次，务必保存）
+# 3. 授权码填 SMTP_PASS，不是邮箱登录密码
+SMTP_HOST=smtp.163.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=你的用户名@163.com
+SMTP_PASS=授权码
+SMTP_FROM=你的用户名@163.com
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/cursor_project/src/mailTmInbox.使用说明.md
+  old_string:    其他项保持 `.env.example` 里的 QQ 配置即可（`SMTP_HOST=smtp.qq.com`，`SMTP_PORT=465`）。
+
+```javascript
+  new_string:    其他项保持 `.env.example` 里的 QQ 配置即可（`SMTP_HOST=smtp.qq.com`，`SMTP_PORT=465`）。
+
+### 网易邮箱（163 / 126 / yeah）SMTP 配置步骤
+
+1. 打开 [mail.163.com](https://mail.163.com)（126 用 mail.126.com，yeah 用 mail.yeah.net）登录。
+2. 右上角 **设置** → **POP3/SMTP/IMAP**，找到「IMAP/SMTP 服务」或「POP3/SMTP 服务」。
+3. 开启对应服务，按提示用绑定手机发短信验证。
+4. 验证成功后页面会显示 **授权码**（只显示一次，请立即复制保存）。  
+   **注意：** 这里填的是授权码，不是邮箱登录密码。
+5. 在 `.env` 中填写：
+   - `SMTP_HOST=smtp.163.com`（126 为 `smtp.126.com`，yeah 为 `smtp.yeah.net`）
+   - `SMTP_PORT=465`，`SMTP_SECURE=true`
+   - `SMTP_USER`、`SMTP_FROM`：你的网易邮箱地址
+   - `SMTP_PASS`：上一步获取的授权码
+
+```javascript
+
+[Tool result] StrReplace
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+I commented out the QQ block and made 163 the default in .env.example. The user might want to use either - having both as comments and one uncommented is a bit odd. Let me re-read - actually it's better to show both as examples: keep QQ as one block (commented) and 163 as another with actual values to fill. So users can uncomment the one they use. Let me change so both are "example" style - just show 163 as the current example and add a comment that for QQ use the QQ section. Actually the original had QQ as the main example. Let me make it so we have two clear blocks: one for QQ, one for 163, and the actual env vars at the bottom that the user fills in. So:
+
+# --- QQ ---
+# SMTP_HOST=smtp.qq.com
+# ...
+# --- 163 ---
+# SMTP_HOST=smtp.163.com
+# ...
+
+Then the actual used block at the end - which one to use? Usually .env.example has one set of placeholders. I'll do: show both options as comments, and leave one set of active keys at the bottom (163 as I did). So user can copy the 163 block and fill, or copy the QQ block and fill. Let me uncomment the final block so it's clear - the last block is the "active" one. So we have:
+- Commented QQ section
+- Commented 163 section  
+- Then the actual SMTP_ vars that are in use (163 as default for 网易 user)
+
+Actually re-reading my edit - I left the bottom as 163. So now the example has 163 as the default. If user uses 网易 they're good. I'll leave as is. If they use QQ they can switch the host/user/pass. Good.
+</think>
+已经按网易邮箱的用法写好说明，并更新了 `.env.example` 和说明文档。
+
+---
+
+## 网易邮箱（163 / 126 / yeah）SMTP 配置
+
+### 步骤
+
+1. **登录**  
+   - 163：https://mail.163.com  
+   - 126：https://mail.126.com  
+   - yeah：https://mail.yeah.net  
+
+2. **开 SMTP**  
+   右上角 **设置** → **POP3/SMTP/IMAP** → 开启 **IMAP/SMTP 服务** 或 **POP3/SMTP 服务**。
+
+3. **拿授权码**  
+   按页面提示用**绑定手机**发短信验证，验证成功后会显示 **授权码**（只显示一次，需要马上复制保存）。  
+   **注意：** 这里填的是**授权码**，不是邮箱登录密码。
+
+4. **填 .env**  
+   在项目根目录复制 `.env.example` 为 `.env`，按你用的邮箱选一组填写：
+
+| 邮箱 | SMTP_HOST | 示例邮箱 |
+|------|-----------|----------|
+| 163 | `smtp.163.com` | `你的用户名@163.com` |
+| 126 | `smtp.126.com` | `你的用户名@126.com` |
+| yeah | `smtp.yeah.net` | `你的用户名@yeah.net` |
+
+`.env` 示例（以 163 为例）：
+
+```env
+SMTP_HOST=smtp.163.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=你的用户名@163.com
+SMTP_PASS=刚才保存的授权码
+SMTP_FROM=你的用户名@163.com
+```
+
+配置好后执行 `npm run email:send` 即可测试。  
+`.env.example` 里已加上网易的注释说明，`mailTmInbox.使用说明.md` 里也有一小节「网易邮箱（163 / 126 / yeah）SMTP 配置步骤」可随时查看。

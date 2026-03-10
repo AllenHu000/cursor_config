@@ -1,0 +1,43 @@
+{
+  "name": "queryProjectsV3",
+  "description": "查询项目",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "projectIds": {
+        "type": "string",
+        "description": "项目ID集合，逗号分隔，例如: projectId1,projectId2,projectId3"
+      },
+      "name": {
+        "type": "string",
+        "description": "项目名字(模糊匹配)"
+      },
+      "uniqueIdPrefix": {
+        "type": "string",
+        "description": "任务编号前缀(也叫做项目编号)"
+      },
+      "pageSize": {
+        "type": "number",
+        "description": "分页大小"
+      },
+      "pageToken": {
+        "type": "string",
+        "description": "分页标"
+      },
+      "sourceId": {
+        "type": "string",
+        "description": "原始项目ID"
+      },
+      "visible": {
+        "type": "string",
+        "description": "项目可见性\n- 'project': 私有项目\n- 'organization': 企业公开项目\n"
+      },
+      "includeTemplate": {
+        "type": "boolean",
+        "description": "是否包含模板项目，默认 false"
+      }
+    },
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

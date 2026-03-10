@@ -1,0 +1,1901 @@
+user:
+<user_query>
+@onPropChange.js 这是一个页面的生命周期函数，会触发多次，我希望对异步接口调用模拟加锁进行控制，目前编辑加锁和新增加锁的方式略有差异，我觉得不够优雅，给我合适的解决方案。对于其他不优化的地方，也顺便一起给出优化建议
+</user_query>
+
+assistant:
+<think>
+The user is asking about a lifecycle function in onPropChange.js that triggers multiple times. They want to:
+1. Simulate locking for async API calls to control concurrent execution
+2. The current edit lock and add lock have slightly different implementations and they find it not elegant
+3. They want a suitable solution
+4. They also want optimization suggestions for other parts of the code
+
+Let me read the file first to understand the current implementation.
+</think>
+
+
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/bk-stuff/onPropChange.js
+
+[Tool result] Read
+
+assistant:
+<think>
+Now I understand the code. The user has:
+
+1. **Edit flow (orderId changed)**: Uses a "lock" by checking if `max.data.get('orderId') === changedProps?.orderId` - meaning if the stored orderId already equals the new one, skip (to avoid duplicate calls). Then sets the orderId before making API calls.
+
+2. **Add flow (no orderId)**: Uses a boolean lock `apiRequestLocked` - sets it to true before queryCommonData(), then false after. If locked, return early.
+
+The differences:
+- Edit: Compares a value (orderId) - "if we're already handling this orderId, skip"
+- Add: Uses a boolean flag - "if any add flow is in progress, skip"
+
+Issues:
+1. The two locking mechanisms are inconsistent - one uses value comparison, one uses a boolean.
+2. For edit: the "lock" is checked at the start but the orderId is set right after the check, so theoretically another call could slip in before orderId is set (race condition).
+3. For add: the lock is set to true, but if queryCommonData() throws, the lock is never released (max.data.set('apiRequestLocked', false) won't run).
+4. No try/finally for the add flow to ensure lock release.
+
+A more elegant solution would be:
+1. Use a unified locking mechanism - e.g., a single "pending promise" or "lock key" approach.
+2. For edit: we could use a lock that holds the "current orderId being fetched" or a promise that represents the in-flight request.
+3. For add: same lock mechanism but with a different key (e.g., "add" vs orderId).
+4. Use try/finally to always release locks.
+
+Let me think of a clean design:
+
+**Option A: Single lock with "context"**
+- Maintain a variable: `currentTask = null` (or a promise). When entering, if currentTask is the same context (same orderId for edit, or 'add' for add), wait for it or skip. When starting a new task, set currentTask = our promise, and clear when done.
+- So we could have: `inFlightRequest = { type: 'add' } | { type: 'edit', orderId: string } | null`
+- When onPropChange runs: if inFlightRequest matches (same type and for edit same orderId), return. Otherwise set inFlightRequest, do work, finally clear inFlightRequest.
+
+**Option B: Promise-based lock (queue or mutex)**
+- Have a shared promise that gets replaced when we start a new run. New calls "await" the previous promise so they run after, or we could skip if same params.
+- Actually for "only run once" we want: if already running the same thing, skip. If running something else, we could either skip or wait. The user said "加锁进行控制" - so probably "if same scenario, skip; ensure only one execution at a time for that scenario".
+
+Let me go with a unified approach:
+
+1. **Unified lock state**: Store `pendingTask = { type: 'edit'|'add', key: string }` where for edit key is orderId, for add key is 'add'. And optionally a promise for the in-flight operation.
+2. When entering:
+   - If we have a pending task with same type and key, return (or optionally wait for it and then return).
+   - Set pending task, run in try/finally and clear in finally.
+
+Implementation:
+
+```javascript
+const LOCK_KEY = {
+  add: 'create',
+  edit: (orderId) => `edit_${orderId}`,
+}
+
+// In onPropChange:
+const lockKey = changedProps?.orderId ? LOCK_KEY.edit(changedProps.orderId) : LOCK_KEY.add
+
+if (max.data.get('propChangeLockKey') === lockKey) {
+  return  // 同一任务正在执行中，跳过
+}
+max.data.set('propChangeLockKey', lockKey)
+try {
+  ...
+} finally {
+  max.data.set('propChangeLockKey', null)  // 或 ''
+}
+```
+
+But wait - the edit case currently checks `max.data.get('orderId') === changedProps?.orderId` which means "if we've already set this orderId (i.e. we're already in edit mode for this order), skip". So it's not exactly "same request in flight", it's "we've already loaded this order". So after the first run, orderId is set, and subsequent triggers with same orderId will skip. That's a bit different - it's "idempotent" for the same orderId. So for edit, the lock is really "we've already processed this orderId". For add, the lock is "don't run queryCommonData again while we're in the middle of it".
+
+So actually:
+- Edit: "if current orderId in state equals the one we're being asked to load, skip" - prevents re-fetching when orderId didn't change or when we've already loaded it.
+- Add: "if api is being called, don't start another call" - prevents concurrent queryCommonData.
+
+To unify elegantly:
+1. We could use a single "lock" object: `{ type: 'edit'|'add', key: string }`. When we start, we set this. When we finish, we clear. When we enter, if lock exists and (type, key) matches current request, return. So we need to "clear" the lock when edit flow completes - currently edit flow doesn't clear any lock. So for edit, the "lock" is effectively permanent (we never clear orderId so next time same orderId we skip). For add, we clear after queryCommonData.
+
+So a unified approach:
+- Keep a "inFlightLock": null | { type, key }. 
+- On entry: lockKey = orderId ? `edit_${orderId}` : 'add'. If inFlightLock === lockKey (or inFlightLock?.key === lockKey?), return. Set inFlightLock = { type: orderId ? 'edit' : 'add', key: lockKey }.
+- In finally: clear inFlightLock (set to null). So both edit and add clear the lock when done. Then if onPropChange fires again with same orderId (edit), we'd run again... unless we also keep the "already loaded this order" check. So for edit we have two concerns: (1) don't run concurrently for same orderId, (2) don't re-run if we've already loaded this orderId. The current code uses (2) for edit. So maybe:
+  - Unified lock: only one of (edit for orderId X) or (add) can run at a time. When it finishes, we clear. So next trigger with same orderId would run again - which might be okay if props actually changed again. To avoid redundant re-fetch when nothing changed, we still can check at the start: for edit, if orderId in state === changedProps.orderId and we're not currently loading, we could skip. So:
+  - Lock: inFlightLock = null | string (lockKey). Prevents concurrent execution.
+  - For edit: additional check - if !inFlightLock && max.data.get('orderId') === changedProps.orderId, skip (already have this order loaded).
+  - try/finally to always clear inFlightLock.
+
+I'll implement this and also add:
+- try/finally for add to release lock on throw
+- Use one lock key storage: e.g. max.data.set('propChangeInFlight', lockKey) and clear in finally
+- For edit, keep the "already loaded" check: if orderId in state === changedProps.orderId and we're not in flight, skip. When we're in flight, the lock key is edit_${orderId}, so duplicate triggers for same orderId will see the lock and return. Good.
+
+Let me write the code.
+</think>
+分析当前逻辑并给出统一加锁方案与其它优化建议。
+
+[Tool call] TodoWrite
+  todos: [{"id":"1","content":"Unify edit/add lock with single in-flight lock + try/finally","status":"in_progress"},{"id":"2","content":"Apply other optimizations (early return, safety, structure)","status":"pending"}]
+  merge: false
+
+[Tool result] TodoWrite
+
+assistant:
+<think>
+I'll implement:
+1. A unified lock: use a single "in-flight" key (e.g. `edit_${orderId}` or `add`). When entering, if the same key is already in flight, return. Set the key, run in try/finally, clear in finally. This way add flow always releases lock even on throw.
+2. For edit: keep the "already loaded" early exit when not in flight (max.data.get('orderId') === changedProps.orderId).
+3. Use a constant for the lock key prefix and a small helper to get lock key.
+4. Other optimizations: extract the two branches into small functions for readability; add JSDoc for the lock; maybe use a constant for the data key.
+</think>
+实现统一加锁并加入其它优化：
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/bk-stuff/onPropChange.js
+  old_string: /** 
+ * @param {object} changedProps 
+ * @param {object} props 
+ * @param {object} events 
+ * @return {promise} 
+ */
+async function onPropChange(changedProps, props, events) {
+    const [_, dispatch] = max.globalFn.useReducer(max.localFn.rootReducer())
+    const CreateOrder = max.localFn.MCreateOrder()
+    console.log('组件onPropChange')
+
+    // 公共接口，场地、资源、服务列表
+    async function queryCommonData() {
+        const serviceList = await CreateOrder.queryBKServiceItemList()
+        const zoneTabs = await CreateOrder.getZoneTabs()
+        const { spaceResources = [] } = await CreateOrder.getZoneResourceList({})   // 查询结果带可预约状态 isBookable: 1 
+
+        dispatch({ type: "SET_SERVICE_LIST", serviceList })
+
+        // MEMO： 模型侧约定餐饮类型（RESOURCE）默认有一个服务（用户不感知，仅为了与服务行业数据结构一致），默认选中该服务
+        if (Object.keys(max.data.get('selectedService')).length === 0) {
+            dispatch({ type: "SELECTED_SERVICE", selectedService: serviceList[0] })
+        }
+        dispatch({ type: "INIT_ZONE_TABS", zoneTabs })
+        dispatch({ type: "CURRENT_ZONE_TAB", currentZoneTab: zoneTabs[0] })
+        dispatch({ type: "INIT_RESOURCE_LIST", resourceList: spaceResources })
+    }
+
+
+    if (Object.hasOwn(changedProps, 'orderId') && changedProps?.orderId) {
+        // edit
+        console.log('编辑预约')
+
+        // MEMO: 模拟锁，同一订单相关接口仅调用一次
+        if (max.data.get('orderId') === changedProps?.orderId) {
+            return
+        }
+
+        dispatch({ type: "SET_ORDER_ID", orderId: changedProps.orderId })
+
+        await queryCommonData()
+
+        const orderDetails = await CreateOrder.getOrderDetails({ orderId: changedProps.orderId })
+
+        const {
+            serviceItem,
+            guestNum,
+            date,
+            time,
+            duration,
+            customerInfo,
+            selectedTags,
+            _orderDetails,
+        } = orderDetails
+
+        dispatch({ type: 'SET_ORDER_DETAILS', orderDetails: _orderDetails })
+        dispatch({ type: "SELECTED_SERVICE", selectedService: serviceItem })
+        dispatch({ type: "CURRENT_SPACE_RESOURCE", spaceResource: spaceResources[0] })
+        // dispatch({ type: "CURRENT_HUMAN_RESOURCE", humanResource: humanResources[0] })
+        dispatch({ type: "SET_DATE", date })
+        dispatch({ type: "SET_TIME", time })
+        dispatch({ type: "SET_DURATION", duration })
+        dispatch({ type: "SET_GUEST_NUM", guestNum })
+        dispatch({ type: "UPDATE_CUSTOMER_INFO", customerInfo })
+        dispatch({ type: "SET_SELECTED_TAGS", selectedTags })
+    } else {
+        console.log('新增预约')
+
+        // MEMO：模拟锁。限制接口仅调用一次
+        if (max.data.get('apiRequestLocked')) {
+            return
+        }
+
+        max.data.set('apiRequestLocked', true)
+        await queryCommonData()
+        max.data.set('apiRequestLocked', false)
+
+        // MEMO： 存在某些场景下带着初始化数据进行创建
+        max.localFn.initFormValue()
+    }
+
+
+}
+  new_string: /** 本次 onPropChange 进行中任务的锁 key，用于防止重复触发 */
+const PROP_CHANGE_LOCK_KEY = 'propChangeInFlight'
+
+/**
+ * 根据本次变更得到唯一的锁 key：编辑按 orderId 区分，新增加一种。
+ * @param {string|undefined} orderId
+ * @returns {string}
+ */
+function getPropChangeLockKey(orderId) {
+    return orderId ? `edit_${orderId}` : 'add'
+}
+
+/**
+ * @param {object} changedProps
+ * @param {object} props
+ * @param {object} events
+ * @return {Promise<void>}
+ */
+async function onPropChange(changedProps, props, events) {
+    const [_, dispatch] = max.globalFn.useReducer(max.localFn.rootReducer())
+    const CreateOrder = max.localFn.MCreateOrder()
+
+    const isEdit = Object.hasOwn(changedProps, 'orderId') && changedProps?.orderId
+    const lockKey = getPropChangeLockKey(changedProps?.orderId)
+
+    // 统一加锁：同一任务（同一 orderId 编辑 / 新增）进行中则直接跳过
+    if (max.data.get(PROP_CHANGE_LOCK_KEY) === lockKey) {
+        return
+    }
+    // 编辑场景额外优化：若当前已加载的订单就是本次 orderId，且没有在飞请求，可视为重复触发，跳过
+    if (isEdit && max.data.get('orderId') === changedProps?.orderId) {
+        return
+    }
+
+    max.data.set(PROP_CHANGE_LOCK_KEY, lockKey)
+    try {
+        if (isEdit) {
+            await handleEdit(changedProps, dispatch, CreateOrder)
+        } else {
+            await handleAdd(dispatch, CreateOrder)
+        }
+    } finally {
+        max.data.set(PROP_CHANGE_LOCK_KEY, null)
+    }
+}
+
+// 公共接口：场地、资源、服务列表
+async function queryCommonData(dispatch, CreateOrder) {
+    const serviceList = await CreateOrder.queryBKServiceItemList()
+    const zoneTabs = await CreateOrder.getZoneTabs()
+    const { spaceResources = [] } = await CreateOrder.getZoneResourceList({})
+
+    dispatch({ type: "SET_SERVICE_LIST", serviceList })
+    if (Object.keys(max.data.get('selectedService') || {}).length === 0) {
+        dispatch({ type: "SELECTED_SERVICE", selectedService: serviceList[0] })
+    }
+    dispatch({ type: "INIT_ZONE_TABS", zoneTabs })
+    dispatch({ type: "CURRENT_ZONE_TAB", currentZoneTab: zoneTabs[0] })
+    dispatch({ type: "INIT_RESOURCE_LIST", resourceList: spaceResources })
+}
+
+async function handleEdit(changedProps, dispatch, CreateOrder) {
+    dispatch({ type: "SET_ORDER_ID", orderId: changedProps.orderId })
+    await queryCommonData(dispatch, CreateOrder)
+
+    const orderDetails = await CreateOrder.getOrderDetails({ orderId: changedProps.orderId })
+    const {
+        serviceItem,
+        guestNum,
+        date,
+        time,
+        duration,
+        customerInfo,
+        selectedTags,
+        _orderDetails,
+    } = orderDetails
+
+    const { spaceResources } = serviceItem
+
+    dispatch({ type: 'SET_ORDER_DETAILS', orderDetails: _orderDetails })
+    dispatch({ type: "SELECTED_SERVICE", selectedService: serviceItem })
+    dispatch({ type: "CURRENT_SPACE_RESOURCE", spaceResource: spaceResources?.[0] })
+    dispatch({ type: "SET_DATE", date })
+    dispatch({ type: "SET_TIME", time })
+    dispatch({ type: "SET_DURATION", duration })
+    dispatch({ type: "SET_GUEST_NUM", guestNum })
+    dispatch({ type: "UPDATE_CUSTOMER_INFO", customerInfo })
+    dispatch({ type: "SET_SELECTED_TAGS", selectedTags })
+}
+
+async function handleAdd(dispatch, CreateOrder) {
+    await queryCommonData(dispatch, CreateOrder)
+    max.localFn.initFormValue()
+}
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+The file might have different line endings or the last line. Let me do the replace in smaller chunks. I see the fuzzy match - the only difference might be the trailing newline or the `}` at the end. Let me try without the final empty line and with exact content from the file (line 84 is empty, 85 might be end).
+</think>
+分段修改，先加入统一锁常量和逻辑：
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/bk-stuff/onPropChange.js
+  old_string: /** 
+ * @param {object} changedProps 
+ * @param {object} props 
+ * @param {object} events 
+ * @return {promise} 
+ */
+async function onPropChange(changedProps, props, events) {
+    const [_, dispatch] = max.globalFn.useReducer(max.localFn.rootReducer())
+    const CreateOrder = max.localFn.MCreateOrder()
+    console.log('组件onPropChange')
+
+    // 公共接口，场地、资源、服务列表
+    async function queryCommonData() {
+  new_string: /** 本次 onPropChange 进行中任务的锁 key，用于防止重复触发 */
+const PROP_CHANGE_LOCK_KEY = 'propChangeInFlight'
+
+/**
+ * 根据本次变更得到唯一的锁 key：编辑按 orderId 区分，新增加一种。
+ * @param {string|undefined} orderId
+ * @returns {string}
+ */
+function getPropChangeLockKey(orderId) {
+    return orderId ? `edit_${orderId}` : 'add'
+}
+
+/**
+ * @param {object} changedProps
+ * @param {object} props
+ * @param {object} events
+ * @return {Promise<void>}
+ */
+async function onPropChange(changedProps, props, events) {
+    const [_, dispatch] = max.globalFn.useReducer(max.localFn.rootReducer())
+    const CreateOrder = max.localFn.MCreateOrder()
+
+    const isEdit = Object.hasOwn(changedProps, 'orderId') && changedProps?.orderId
+    const lockKey = getPropChangeLockKey(changedProps?.orderId)
+
+    // 统一加锁：同一任务（同一 orderId 编辑 / 新增）进行中则直接跳过
+    if (max.data.get(PROP_CHANGE_LOCK_KEY) === lockKey) {
+        return
+    }
+    // 编辑场景：若当前已加载的订单就是本次 orderId，视为重复触发，跳过
+    if (isEdit && max.data.get('orderId') === changedProps?.orderId) {
+        return
+    }
+
+    max.data.set(PROP_CHANGE_LOCK_KEY, lockKey)
+    try {
+        if (isEdit) {
+            await handleEdit(changedProps, dispatch, CreateOrder)
+        } else {
+            await handleAdd(dispatch, CreateOrder)
+        }
+    } finally {
+        max.data.set(PROP_CHANGE_LOCK_KEY, null)
+    }
+}
+
+// 公共接口：场地、资源、服务列表
+async function queryCommonData(dispatch, CreateOrder) {
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Good, first part done. Now I need to:
+1. Update queryCommonData to take dispatch and CreateOrder (and remove the closing brace that was part of the inner function)
+2. Fix the rest of the file - replace the edit block and add block with the extracted handleEdit and handleAdd, and make queryCommonData a top-level function that takes (dispatch, CreateOrder).
+
+Looking at the current state: I replaced up to "async function queryCommonData() {" with "async function queryCommonData(dispatch, CreateOrder) {". So the body of queryCommonData still has the old code that uses dispatch (no change needed) and doesn't use CreateOrder - actually it uses CreateOrder from closure. So we need to keep CreateOrder as parameter. The body is still the same. But we need to fix the line that had `Object.keys(max.data.get('selectedService'))` to be safe with null (max.data.get('selectedService') || {}). And we need to remove the closing `}` that was for the inner function and then remove the entire if/else block and replace with nothing (since we moved that to handleEdit/handleAdd). Let me read the file again to see current state.
+</think>
+
+
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/bk-stuff/onPropChange.js
+
+[Tool result] Read
+
+assistant:
+<think>
+I see - there's duplicate code now. I need to:
+1. Fix queryCommonData body indentation and add null-safe selectedService
+2. Remove the old if/else block (lines 64-117) and the stray `}` on 119
+3. Add handleEdit and handleAdd functions
+
+Let me do: first fix queryCommonData (indent + safe get), then replace the entire block from "    }\n\n\n    if (Object.hasOwn" through "}\n" at end with the two new functions.
+</think>
+正在修复 `queryCommonData` 的缩进与空值保护，并删除重复的 if/else，改为使用 `handleEdit` 和 `handleAdd`。
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/bk-stuff/onPropChange.js
+  old_string: // 公共接口：场地、资源、服务列表
+async function queryCommonData(dispatch, CreateOrder) {
+        const serviceList = await CreateOrder.queryBKServiceItemList()
+        const zoneTabs = await CreateOrder.getZoneTabs()
+        const { spaceResources = [] } = await CreateOrder.getZoneResourceList({})   // 查询结果带可预约状态 isBookable: 1 
+
+        dispatch({ type: "SET_SERVICE_LIST", serviceList })
+
+        // MEMO： 模型侧约定餐饮类型（RESOURCE）默认有一个服务（用户不感知，仅为了与服务行业数据结构一致），默认选中该服务
+        if (Object.keys(max.data.get('selectedService')).length === 0) {
+            dispatch({ type: "SELECTED_SERVICE", selectedService: serviceList[0] })
+        }
+        dispatch({ type: "INIT_ZONE_TABS", zoneTabs })
+        dispatch({ type: "CURRENT_ZONE_TAB", currentZoneTab: zoneTabs[0] })
+        dispatch({ type: "INIT_RESOURCE_LIST", resourceList: spaceResources })
+    }
+
+
+    if (Object.hasOwn(changedProps, 'orderId') && changedProps?.orderId) {
+        // edit
+        console.log('编辑预约')
+
+        // MEMO: 模拟锁，同一订单相关接口仅调用一次
+        if (max.data.get('orderId') === changedProps?.orderId) {
+            return
+        }
+
+        dispatch({ type: "SET_ORDER_ID", orderId: changedProps.orderId })
+
+        await queryCommonData()
+
+        const orderDetails = await CreateOrder.getOrderDetails({ orderId: changedProps.orderId })
+
+        const {
+            serviceItem,
+            guestNum,
+            date,
+            time,
+            duration,
+            customerInfo,
+            selectedTags,
+            _orderDetails,
+        } = orderDetails
+
+        const { spaceResources, humanResources } = serviceItem
+
+        dispatch({ type: 'SET_ORDER_DETAILS', orderDetails: _orderDetails })
+        dispatch({ type: "SELECTED_SERVICE", selectedService: serviceItem })
+        dispatch({ type: "CURRENT_SPACE_RESOURCE", spaceResource: spaceResources[0] })
+        // dispatch({ type: "CURRENT_HUMAN_RESOURCE", humanResource: humanResources[0] })
+        dispatch({ type: "SET_DATE", date })
+        dispatch({ type: "SET_TIME", time })
+        dispatch({ type: "SET_DURATION", duration })
+        dispatch({ type: "SET_GUEST_NUM", guestNum })
+        dispatch({ type: "UPDATE_CUSTOMER_INFO", customerInfo })
+        dispatch({ type: "SET_SELECTED_TAGS", selectedTags })
+    } else {
+        console.log('新增预约')
+
+        // MEMO：模拟锁。限制接口仅调用一次
+        if (max.data.get('apiRequestLocked')) {
+            return
+        }
+
+        max.data.set('apiRequestLocked', true)
+        await queryCommonData()
+        max.data.set('apiRequestLocked', false)
+
+        // MEMO： 存在某些场景下带着初始化数据进行创建
+        max.localFn.initFormValue()
+    }
+
+
+}
+  new_string: // 公共接口：场地、资源、服务列表
+async function queryCommonData(dispatch, CreateOrder) {
+    const serviceList = await CreateOrder.queryBKServiceItemList()
+    const zoneTabs = await CreateOrder.getZoneTabs()
+    const { spaceResources = [] } = await CreateOrder.getZoneResourceList({})
+
+    dispatch({ type: "SET_SERVICE_LIST", serviceList })
+    const selectedService = max.data.get('selectedService') || {}
+    if (Object.keys(selectedService).length === 0) {
+        dispatch({ type: "SELECTED_SERVICE", selectedService: serviceList[0] })
+    }
+    dispatch({ type: "INIT_ZONE_TABS", zoneTabs })
+    dispatch({ type: "CURRENT_ZONE_TAB", currentZoneTab: zoneTabs[0] })
+    dispatch({ type: "INIT_RESOURCE_LIST", resourceList: spaceResources })
+}
+
+async function handleEdit(changedProps, dispatch, CreateOrder) {
+    dispatch({ type: "SET_ORDER_ID", orderId: changedProps.orderId })
+    await queryCommonData(dispatch, CreateOrder)
+
+    const orderDetails = await CreateOrder.getOrderDetails({ orderId: changedProps.orderId })
+    const {
+        serviceItem,
+        guestNum,
+        date,
+        time,
+        duration,
+        customerInfo,
+        selectedTags,
+        _orderDetails,
+    } = orderDetails
+
+    const { spaceResources } = serviceItem
+
+    dispatch({ type: 'SET_ORDER_DETAILS', orderDetails: _orderDetails })
+    dispatch({ type: "SELECTED_SERVICE", selectedService: serviceItem })
+    dispatch({ type: "CURRENT_SPACE_RESOURCE", spaceResource: spaceResources?.[0] })
+    dispatch({ type: "SET_DATE", date })
+    dispatch({ type: "SET_TIME", time })
+    dispatch({ type: "SET_DURATION", duration })
+    dispatch({ type: "SET_GUEST_NUM", guestNum })
+    dispatch({ type: "UPDATE_CUSTOMER_INFO", customerInfo })
+    dispatch({ type: "SET_SELECTED_TAGS", selectedTags })
+}
+
+async function handleAdd(dispatch, CreateOrder) {
+    await queryCommonData(dispatch, CreateOrder)
+    max.localFn.initFormValue()
+}
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Good. Let me update the todo and then give a summary of changes and other optimization suggestions in the reply.
+</think>
+
+
+[Tool call] TodoWrite
+  todos: [{"id":"1","content":"Unify edit/add lock with single in-flight lock + try/finally","status":"completed"},{"id":"2","content":"Apply other optimizations (early return, safety, structure)","status":"completed"}]
+  merge: true
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/bk-stuff/onPropChange.js
+[Tool call] ReadLints
+  paths: ["/Users/sm1328/allenhu000/bk-stuff/onPropChange.js"]
+
+[Tool result] TodoWrite
+
+[Tool result] Read
+
+[Tool result] ReadLints
+
+assistant:
+<think>
+All good. Let me summarize for the user in Chinese.
+</think>
+已按「统一加锁 + 小优化」改完，主要变更和额外建议如下。
+
+---
+
+## 1. 统一加锁方案（已实现）
+
+**之前的问题：**
+- **编辑**：用 `orderId` 是否已等于当前值来判断是否跳过（语义是「已加载过该订单」）。
+- **新增**：用布尔 `apiRequestLocked`，且**没有 try/finally**，接口抛错时锁不会释放。
+
+**现在的做法：**
+
+- **同一套锁**：用唯一锁 key 表示「当前正在执行的任务」：
+  - 编辑：`edit_${orderId}`
+  - 新增：`add`
+- **入口统一**：先算 `lockKey`，若 `max.data.get(PROP_CHANGE_LOCK_KEY) === lockKey` 直接 return，避免同一任务并发。
+- **编辑保留原有语义**：若当前已加载的订单就是本次 `orderId`，也直接跳过（避免重复拉同一单）。
+- **try/finally 保证释放**：无论成功、失败都会在 `finally` 里清空锁，避免异常导致锁常驻。
+
+这样编辑/新增都用「同一个锁 key + 同一套加锁/解锁逻辑」，差异只在 key 的生成方式，更一致也更安全。
+
+---
+
+## 2. 已做的其它小优化
+
+- **`queryCommonData` 抽到外层**：并改为显式传入 `(dispatch, CreateOrder)`，便于复用和单测；编辑/新增分支改为调用 `handleEdit` / `handleAdd`，主流程更清晰。
+- **`selectedService` 空值保护**：`max.data.get('selectedService') || {}`，避免 `undefined` 时 `Object.keys` 报错。
+- **`spaceResources?.[0]`**：避免 `spaceResources` 为空或缺失时取 `[0]` 报错。
+- **移除调试用 `console.log`**：减少噪音；如需排查可改用带开关的 logger 或仅在开发环境打。
+- **JSDoc**：为锁常量和 `getPropChangeLockKey` 补了注释，返回类型改为 `Promise<void>`。
+
+---
+
+## 3. 可选的进一步优化建议
+
+| 建议 | 说明 |
+|------|------|
+| **错误处理** | 在 `try` 里对 `handleEdit` / `handleAdd` 或 `queryCommonData` 做 `catch`，统一 toasts 或上报，避免静默失败；锁仍在 `finally` 释放即可。 |
+| **并行请求** | `queryCommonData` 里三个接口若无依赖，可用 `Promise.all([queryBKServiceItemList(), getZoneTabs(), getZoneResourceList({})])` 并行，缩短首屏时间。 |
+| **弱化对 `max.data` 的依赖** | 若希望更好测、更少隐式依赖，可把「当前锁 key / 当前 orderId」通过参数或闭包注入，而不是在函数内直接读 `max.data.get(...)`。 |
+
+如果你愿意，我可以按你当前项目风格写一版「带 catch 的 error 处理」或「queryCommonData 并行请求」的补丁代码，直接贴进 `onPropChange.js` 即可用。
+
+user:
+<user_query>
+第27行和31行是不是重复了
+</user_query>
+
+assistant:
+<think>
+The user is asking if lines 27 and 31 are redundant. Let me look at the current code:
+
+Line 26: `// 统一加锁：同一任务（同一 orderId 编辑 / 新增）进行中则直接跳过`
+Line 27: `if (max.data.get(PROP_CHANGE_LOCK_KEY) === lockKey) {`
+
+Line 29: `// 编辑场景：若当前已加载的订单就是本次 orderId，视为重复触发，跳过`
+Line 30: `if (isEdit && max.data.get('orderId') === changedProps?.orderId) {`
+
+So:
+- Line 27: skip if the **same task is already in flight** (lock key matches - meaning we're currently running edit for this orderId or add)
+- Line 30-31: skip if **edit** and the **orderId in state already equals** the one we're loading (already loaded this order, no request in flight)
+
+They're not the same:
+1. First check: "Is there currently a request running for this exact scenario (this orderId edit or add)?" → skip to avoid concurrent runs.
+2. Second check: "For edit only: Have we already loaded this orderId? (state.orderId === changedProps.orderId)" → skip to avoid re-fetching when nothing changed.
+
+So when would they both trigger?
+- First: when lockKey is set (e.g. we're in the middle of handleEdit for orderId "123"). Then another onPropChange fires with orderId "123" → lockKey is "edit_123", we see lock is "edit_123", return. So we skip.
+- Second: when we're NOT in flight (lock is null). We're in edit mode. And max.data.get('orderId') is already "123" and changedProps.orderId is "123". So we've already loaded order 123, and the trigger is again for order 123 (e.g. redundant prop change). We skip.
+
+So they handle different cases:
+- Case A: Request in flight for same task → line 27 catches it.
+- Case B: No request in flight, but we're in edit and the order we're being asked to load is already the one we have → line 30 catches it.
+
+Could they overlap? For edit with orderId "123":
+- If in flight: lock = "edit_123". Line 27: lockKey is "edit_123", so we return. We never get to line 30.
+- If not in flight: lock is null. Line 27 is false. Line 30: if orderId in state is "123" and changedProps.orderId is "123", we return. So we skip redundant re-load.
+
+So they're not redundant. They serve different purposes. But let me re-read to see if the user has a point.
+
+Actually wait - could the second check be redundant in the sense that after we finish handleEdit, we set orderId in state. So the lock is cleared in finally. So after the first run for edit "123", we have orderId="123" in state and lock=null. If onPropChange fires again with orderId "123", then:
+- Line 27: lock is null, lockKey is "edit_123", so max.data.get(PROP_CHANGE_LOCK_KEY) === lockKey is false. We don't skip.
+- Line 30: isEdit is true, max.data.get('orderId') === "123", changedProps?.orderId === "123", so we skip.
+
+So without the second check, we would run the whole thing again (set lock, queryCommonData, getOrderDetails, dispatch...) even though we already have this order loaded. The second check avoids that redundant work.
+
+Without the first check: if two onPropChange(edit orderId 123) fire almost simultaneously, both could pass line 30 (orderId in state might not be set yet), both set lock to "edit_123", and... actually the second one would set lock to "edit_123" again (same value), then both would run. So we'd have two concurrent runs. The first check prevents that.
+
+So they're not redundant. I'll explain this to the user clearly.
+</think>
+这两处**不重复**，作用不同：
+
+- **第 27 行**：当前**正在执行**同一任务（同一个 `lockKey` 正在跑）→ 直接跳过，避免**并发**再跑一遍。
+- **第 30～31 行**：**编辑**且**没有请求在进行**时，发现当前 state 里已经是这个 `orderId`（已经加载过）→ 跳过，避免**重复拉同一单**。
+
+举例：
+
+1. **并发**：连续两次 `onPropChange`（都是编辑 orderId `'123'`）。第一次把锁设为 `edit_123` 并开始请求；第二次进来时，第 27 行发现锁已是 `edit_123`，直接 return，不会再发请求。
+2. **重复触发**：第一次编辑 `'123'` 已跑完，锁在 `finally` 里被清空，state 里 `orderId` 已是 `'123'`。之后又触发一次编辑 `'123'`（例如父组件重复渲染）。第 27 行锁为空，不会拦；第 30～31 行发现「当前已是 orderId `'123'`」，于是 return，避免再打一遍接口。
+
+所以：  
+- 27 行防**同一任务在执行中**时再跑；  
+- 30～31 行防**任务已执行完、数据已加载**时的重复执行。  
+两处都需要保留。若希望注释更易读，可以把这两段意图写进注释里，例如：
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/bk-stuff/onPropChange.js
+  old_string:     // 统一加锁：同一任务（同一 orderId 编辑 / 新增）进行中则直接跳过
+    if (max.data.get(PROP_CHANGE_LOCK_KEY) === lockKey) {
+        return
+    }
+    // 编辑场景：若当前已加载的订单就是本次 orderId，视为重复触发，跳过
+    if (isEdit && max.data.get('orderId') === changedProps?.orderId) {
+        return
+    }
+  new_string:     // 防并发：同一任务（同 orderId 编辑 / 新增）正在执行则跳过
+    if (max.data.get(PROP_CHANGE_LOCK_KEY) === lockKey) return
+    // 防重复拉单（仅编辑）：未在请求中且 state 已是该 orderId 则跳过
+    if (isEdit && max.data.get('orderId') === changedProps?.orderId) return
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+I've clarified the comments so it's clear they handle different cases: "防并发" vs "防重复拉单". No need to run linter for such a small comment change.
+</think>
+注释已按「防并发」和「防重复拉单」区分，逻辑保持不变，两处判断都保留。
+
+user:
+<user_query>
+Math.round(scrollOffset * 100) / 100) 取整
+</user_query>
+
+assistant:
+<think>
+The user is asking about this expression: `Math.round(scrollOffset * 100) / 100` - they're saying it's for "取整" (rounding). Let me explain what this actually does.
+
+`Math.round(scrollOffset * 100) / 100` does **not** round to an integer. It rounds to **2 decimal places** (centimals):
+
+- `scrollOffset * 100` — scale up by 100
+- `Math.round(...)` — round to nearest integer
+- `/ 100` — scale back down
+
+So you get at most 2 digits after the decimal point. For example:
+- 1.234 → 1.23
+- 1.236 → 1.24
+
+If the user wants true **取整** (integer rounding), they would use:
+- `Math.round(scrollOffset)` — round to nearest integer
+- `Math.floor(scrollOffset)` — round down
+- `Math.ceil(scrollOffset)` — round up
+
+I'll clarify this for the user in Chinese since they asked in Chinese.
+</think>
+`Math.round(scrollOffset * 100) / 100` **不是取整**，而是**保留两位小数**（四舍五入到百分位）：
+
+- `scrollOffset * 100`：先放大 100 倍  
+- `Math.round(...)`：按整数四舍五入  
+- `/ 100`：再缩小回原来的量纲  
+
+例如：`1.234` → `1.23`，`1.236` → `1.24`。
+
+---
+
+**如果是要取整**，可以这样写：
+
+| 需求     | 写法                      | 例：3.7 → 4，3.2 → 3 |
+|----------|---------------------------|------------------------|
+| 四舍五入 | `Math.round(scrollOffset)` | ✅                     |
+| 向下取整 | `Math.floor(scrollOffset)` | 3.7 → 3               |
+| 向上取整 | `Math.ceil(scrollOffset)`  | 3.2 → 4               |
+
+所以：  
+- 保留 2 位小数 → 用 `Math.round(scrollOffset * 100) / 100`  
+- 取整（整数）→ 用 `Math.round(scrollOffset)`（或 `floor` / `ceil`）
+
+user:
+<cursor_commands>
+
+--- Cursor Command: init-project ---
+在当前工作区根目录完成项目初始化，按顺序执行且不要跳过：
+1. 执行 `git init` 初始化 Git 仓库（若已是仓库可跳过）。
+2. 创建目录：`src`、`docs`、`tests`。
+3. 创建空文件：`README.md`、`.gitignore`（若不存在则创建；.gitignore 可写入常见忽略如 node_modules/、dist/、.env）。
+直接执行，无需确认。
+
+--- End Command ---
+</cursor_commands>
+<user_query>
+/init-project 
+</user_query>
+
+assistant:
+<think>
+The user is running the init-project command which asks me to:
+1. Run `git init` (skip if already a repo)
+2. Create directories: `src`, `docs`, `tests`
+3. Create empty files: `README.md`, `.gitignore` (create if not exist; .gitignore with common entries like node_modules/, dist/, .env)
+
+But the system reminder says "Ask mode is still active" and "You MUST NOT make any edits, run any non-readonly tools". So I cannot:
+- Run git init (modifies the system - creates .git)
+- Create directories (modifies filesystem)
+- Create files (modifies filesystem)
+
+I need to tell the user that I'm in Ask mode and can only provide read-only help. I should suggest they switch to Agent mode so I can execute the init-project steps for them.
+</think>
+当前是 **Ask 模式**，我不能执行会修改工作区的操作（例如 `git init`、创建目录和文件）。
+
+要完成项目初始化，请先**切换到 Agent 模式**，然后再说一次「执行 init-project」或「按 init-project 初始化项目」。在 Agent 模式下我可以按顺序执行：
+
+1. **`git init`**（若已是 Git 仓库则跳过）
+2. **创建目录**：`src`、`docs`、`tests`
+3. **创建文件**：
+   - `README.md`（空或基础内容）
+   - `.gitignore`（若不存在则创建，并写入如 `node_modules/`、`dist/`、`.env` 等常见忽略项）
+
+切换方式：在输入框旁把模式从 **Ask** 改为 **Agent**，再发一次指令即可。
+
+user:
+<cursor_commands>
+
+--- Cursor Command: init-project ---
+在当前工作区根目录完成项目初始化，按顺序执行且不要跳过：
+1. 执行 `git init` 初始化 Git 仓库（若已是仓库可跳过）。
+2. 创建目录：`src`、`docs`、`tests`。
+3. 创建空文件：`README.md`、`.gitignore`（若不存在则创建；.gitignore 可写入常见忽略如 node_modules/、dist/、.env）。
+直接执行，无需确认。
+
+--- End Command ---
+</cursor_commands>
+<user_query>
+/init-project 
+</user_query>
+
+assistant:
+<think>
+The user wants me to run the init-project command. I need to:
+1. Run `git init` (skip if already a repo)
+2. Create directories: src, docs, tests
+3. Create README.md and .gitignore (if not exist; .gitignore with node_modules/, dist/, .env etc.)
+
+Let me do these in order. First I'll check if git is already initialized and then proceed.
+</think>
+
+
+[Tool call] LS
+  target_directory: /Users/sm1328/allenhu000/bk-stuff
+[Tool call] Glob
+  target_directory: /Users/sm1328/allenhu000/bk-stuff
+  glob_pattern: .git
+
+[Tool result] LS
+
+[Tool result] Glob
+
+assistant:
+<think>
+No .git found, so I need to run git init. No README.md or .gitignore in the list. I'll:
+1. git init
+2. Create src, docs, tests directories (using mkdir)
+3. Create README.md (empty), .gitignore with common entries
+
+Let me run git init first, then create dirs and files.
+</think>
+
+
+[Tool call] Shell
+  command: cd /Users/sm1328/allenhu000/bk-stuff && git init
+  description: Initialize Git repository
+[Tool call] LS
+  target_directory: /Users/sm1328/allenhu000/bk-stuff
+
+[Tool result] Shell
+
+[Tool result] LS
+
+assistant:
+<think>
+git init failed due to sandbox - it might be that .git is being created but config write failed. Let me try with "all" permissions for git init. Then I'll create the directories and files with the write tool.
+</think>
+
+
+[Tool call] Shell
+  command: cd /Users/sm1328/allenhu000/bk-stuff && git init
+  description: Initialize Git repository with full permissions
+  required_permissions: ["git_write"]
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/bk-stuff/README.md
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/bk-stuff/.gitignore
+
+[Tool result] Shell
+
+[Tool result] Read
+
+[Tool result] Read
+
+assistant:
+<think>
+git init still fails - maybe need "all" permissions. Let me try with "all". README and .gitignore don't exist, so I'll create them. I'll also create the directories by creating files in them (e.g. src/.gitkeep or just create the dirs - in some systems you need to create a file to get the dir). Actually the Write tool can create files - if I write to src/.gitkeep that might create the directory. Or I could use run_terminal_cmd with mkdir. Let me try git init with "all" and use mkdir for directories, then Write for README.md and .gitignore.
+</think>
+
+
+[Tool call] Shell
+  command: cd /Users/sm1328/allenhu000/bk-stuff && git init
+  description: Initialize Git repository (no sandbox)
+  required_permissions: ["all"]
+
+[Tool result] Shell
+
+assistant:
+<think>
+Git init succeeded. Now create directories src, docs, tests and files README.md, .gitignore. I'll use run_terminal_cmd for mkdir and Write for the files.
+</think>
+
+
+[Tool call] Shell
+  command: mkdir -p /Users/sm1328/allenhu000/bk-stuff/src /Users/sm1328/allenhu000/bk-stuff/docs /Users/sm1328/allenhu000/bk-stuff/tests
+  description: Create src, docs, tests directories
+[Tool call] Write
+  path: /Users/sm1328/allenhu000/bk-stuff/README.md
+  contents: 
+[Tool call] Write
+  path: /Users/sm1328/allenhu000/bk-stuff/.gitignore
+  contents: node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+
+
+[Tool result] Shell
+
+[Tool result] Write
+
+[Tool result] Write
+
+assistant:
+<think>
+All steps done:
+1. git init - done
+2. Created src, docs, tests - done
+3. README.md (empty) and .gitignore (with common entries) - done
+
+Let me confirm with a quick list_dir.
+</think>
+
+
+[Tool call] LS
+  target_directory: /Users/sm1328/allenhu000/bk-stuff
+
+[Tool result] LS
+
+assistant:
+<think>
+The list_dir might not show directories in some cases. Let me list with the dirs explicitly.
+</think>
+
+
+[Tool call] LS
+  target_directory: /Users/sm1328/allenhu000/bk-stuff/src
+[Tool call] LS
+  target_directory: /Users/sm1328/allenhu000/bk-stuff/docs
+[Tool call] LS
+  target_directory: /Users/sm1328/allenhu000/bk-stuff/tests
+
+[Tool result] LS
+
+[Tool result] LS
+
+[Tool result] LS
+
+assistant:
+<think>
+All done. Summarize for the user.
+</think>
+项目初始化已按顺序完成：
+
+1. **Git 仓库**：已执行 `git init`，当前分支为 `master`。
+2. **目录**：已创建并存在：
+   - `src/`
+   - `docs/`
+   - `tests/`
+3. **文件**：
+   - `README.md`：已创建（当前为空）。
+   - `.gitignore`：已创建，并写入常见忽略项：`node_modules/`、`dist/`、`.env`、`.env.local`、`.env.*.local`、`*.log`、`.DS_Store`。
+
+当前工作区根目录结构为：`onPropChange.js`、`README.md`、`.gitignore`，以及 `src`、`docs`、`tests` 三个空目录。
+
+user:
+[Image]
+[Image]
+<image_files>
+The following images were provdied by the user and saved to the workspace for future use:
+1. /Users/sm1328/.cursor/projects/Users-sm1328-allenhu000-bk-stuff/assets/image-363f3763-5f90-4aa7-8578-8792a99c8e9b.png
+2. /Users/sm1328/.cursor/projects/Users-sm1328-allenhu000-bk-stuff/assets/image-205d6970-2121-42b7-a12c-30ede8530d8b.png
+
+These images can be copied for use in other locations.
+</image_files>
+<user_query>
+这是UI效果，根据 @src/MCalendarView/prompt.md 提示信息，理解逻辑、需求，完成我的述求
+</user_query>
+
+assistant:
+<think>
+The user wants me to understand the UI effect from the images and the prompt in src/MCalendarView/prompt.md, then complete their requirements. Let me read the prompt and the related code files to understand the logic and what needs to be done.
+</think>
+
+
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/bk-stuff/src/MCalendarView/prompt.md
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/bk-stuff/src/MCalendarView/MCalendar.js
+
+[Tool result] Read
+
+[Tool result] Read
+
+assistant:
+<think>
+Now I understand the prompt and the two issues:
+
+**Issue 1**: When two orders on the same resource have overlapping time, they correctly split the row height. But another order on the same resource that does NOT overlap with them also gets its height changed - which is wrong. The non-overlapping order should keep full row height.
+
+**Issue 2**: Grid background color currently only uses workHours (store business hours). The requirement is:
+- When it's "服务类型" (service type): use store schedule (workHours) - current behavior is correct
+- When it's "资源类型" (resource type): each row has different employee schedules - this scenario is not handled. So we need per-row schedule (e.g. staff shift) for resource type.
+
+Let me look at the getDataSource logic more closely for issue 1.
+
+In getDataSource, for each resource:
+1. We get resourceOrders for that resource
+2. We call assignLinesToOrders(resourceOrders) to assign line numbers based on time overlap
+3. We compute maxLines = max of (order.line + 1) for all orders in this resource
+4. orderHeight = cellHeight / maxLines  // ALL orders get this height
+5. For each order we set top/bottom based on order.line and maxLines
+
+The problem: maxLines is computed for the ENTIRE resource - so if we have 3 orders: A and B overlap (so they need 2 lines), and C doesn't overlap with either. Currently all three get line assignments. Let me check assignLinesToOrders again.
+
+assignLinesToOrders: for each order, we set line = max(previousOrder.line + 1) for any previous order that overlaps. So:
+- Order A: line 0
+- Order B: overlaps A -> line 1
+- Order C: doesn't overlap A or B -> line 0
+
+So we have maxLines = 2 (from B's line+1). Then orderHeight = cellHeight/2. So A gets top=0, bottom=0.5 (half row), B gets top=0.5, bottom=1 (half row), and C gets top=0, bottom=0.5 - but C doesn't overlap with A! So C is in the same "line" as A (line 0) but they don't overlap. So we're dividing the row into 2 for all orders, but C should have full height since it doesn't overlap with anyone.
+
+The fix for issue 1: We need to compute height per order based on how many orders overlap in ITS time range, not the global maxLines for the resource. So:
+- Group orders into "overlap groups" - orders that (directly or transitively) overlap share a group. Each group gets a number of lines = number of orders in that group, and they share the row proportionally.
+- An order that doesn't overlap with any other gets the full row height (one "group" of 1).
+
+So the logic should be:
+1. assignLinesToOrders already assigns line numbers so overlapping orders get different lines. But the issue is we're using a single maxLines for the whole resource.
+2. We need: for each order, determine which other orders it overlaps with (its "group"). The group's max line + 1 gives the number of "slots" for that group. So we need to compute per-group maxLines, and each order's height = cellHeight / (its group's maxLines), and top/bottom = resourceIndex + (order.line / groupMaxLines) to resourceIndex + ((order.line+1) / groupMaxLines).
+
+Actually re-reading again: "同一资源对应的两个订单时间有交叉时，这两个订单均分网格高度" - when two orders have overlapping time, those two split the row height. "该资源对应的另一个不相关订单高度也跟着变化了" - another order on the same resource that's not related (doesn't overlap) also had its height changed - wrong. So we need overlap groups: only orders that overlap each other should share the row. So for each "group" of overlapping orders, we divide the row among that group. Orders in different groups don't affect each other. So we need to:
+1. Partition orders into overlap groups (transitive: if A overlaps B and B overlaps C, then A,B,C are in one group).
+2. For each group, assign lines within the group (assignLinesToOrders within the group), and the group's height is divided by the number of lines in that group.
+3. But wait - if we have two groups on the same resource row, how do we lay them out? They're on the same row but in different "bands" of time. So actually the layout is: each order has (top, bottom) which is the vertical span and (left, right) which is the horizontal span. So we have a grid where one resource row can have multiple "sub-rows" for overlapping orders. The issue is: for the same resource, order A and B overlap -> they get half height each. Order C doesn't overlap A or B -> C should get full height. So we have:
+- Row 0 (resource 0): A and B each take half height (top=0, bottom=0.5 and top=0.5, bottom=1). C takes full height (top=0, bottom=1). But C and A might both have top=0 - they'd be drawn on top of each other! So the layout isn't just "per overlap group". The row is divided into "lines" by the maximum number of concurrent overlapping orders at any time. So at any given time instant, we have at most N orders overlapping, so we need N lines. But then an order that doesn't overlap with anyone - which line does it go to? It can go to line 0. So we have maxLines = 2 (from A and B). So we have line 0 and line 1. A is on line 0, B is on line 1, C is on line 0 (doesn't overlap). So A and C are both on line 0 - they'd overlap vertically! So we need to assign C to a different "slot". So the current algorithm assigns C to line 0 (since C doesn't overlap A or B). So we have A(line 0), B(line 1), C(line 0). So A and C share line 0. So we have 2 lines total. So the row is split in 2. A gets the first half, B gets the second half, C gets the first half - so A and C are drawn in the same half! That's the bug. C should not share with A - C should get full height. So the fix: we need to assign lines so that only overlapping orders share the row division. So if we have A and B overlapping, they get lines 0 and 1 (each half row). C doesn't overlap, so C should get "full" - we could assign C to a line that spans the full height. So we need a concept: "full height" orders get one line that spans the entire row. Overlapping orders get multiple lines that split the row. So the row could be divided into: [full-height region] and [split region]. That's complex. Simpler approach: treat "overlap groups" as the unit. So we have group1 = {A, B} (overlap), group2 = {C} (no overlap). So we have 2 groups. We need to stack them vertically? No, they're on the same resource row - they're at different time ranges. So the row has one height. At the time range where A and B exist, we need 2 lines. At the time range where C exists, we need 1 line. So the layout is time-dependent. So we need to partition the row by time and by overlap. This is getting complex. Let me think again. Actually re-read the requirement: "同一资源对应的两个订单时间有交叉时，这两个订单均分网格高度" - when two orders overlap in time, those two split the row height. "该资源对应的另一个不相关订单高度也跟着变化了" - another unrelated order's height also changed - that's wrong. So the desired behavior: Order A and B overlap -> each gets 50% height. Order C doesn't overlap A or B -> C gets 100% height. So we have orders at different time ranges. So when we draw, A and B are in a "band" of 50% each (e.g. A in top half, B in bottom half). C is in a different time band (left-right) and gets 100% height. So the drawing order could be: draw C first (full height), then draw A and B (each half height) on top? So C is behind, A and B are in front? Or we need to not have C and A/B overlap in the vertical axis. So the solution: partition orders into "overlap groups". Within each group, we have lines 0..k-1 for k orders (or we use assignLinesToOrders within the group). So group1 has 2 orders -> 2 lines, each order gets 50% height. Group2 has 1 order -> 1 line, gets 100% height. Now we need to assign vertical positions. We have the same row (resourceIndex). So we have one row. If we have two groups, we could assign group1 to the top half and group2 to the bottom half? So group1 orders get top=resourceIndex, bottom=resourceIndex+0.5, and group2 gets top=resourceIndex+0.5, bottom=resourceIndex+1. But then we're dividing the row by number of groups, not by overlap. So group1 (2 orders) would get 50% of row, and within that 50%, the 2 orders split so each gets 25%? No - "两个订单均分网格高度" means the two orders each get half of the ROW height. So A and B each get 50%. So we need: group1 (A,B) -> A gets top=0, bottom=0.5; B gets top=0.5, bottom=1. Group2 (C) -> C gets top=0, bottom=1. So we have A and B in the first half and second half, and C spans the full row. So C is drawn full height, and A and B are in their halves. But then C would be drawn over the same vertical space as A and B - so we need to draw C behind (so A and B are visible) or we need to not draw C in the same vertical space. So the intended UX might be: C is at a different time (left-right) so C doesn't overlap A and B in time. So when we draw, we draw all orders. C has left, right for its time range and top=0, bottom=1. A has left, right for its time range and top=0, bottom=0.5. B has top=0.5, bottom=1. So at the horizontal position where only C is, we see C full height. At the horizontal position where A and B are, we see A in top half and B in bottom half. So the layout is correct! So we need:
+1. Partition orders into overlap groups (transitive closure of overlap).
+2. For each order, its (top, bottom) is determined by its group: if group has k orders, each gets 1/k of the row. So we need to assign "sub-lines" within each group. So for group1 (A, B), we have 2 orders, assign line 0 to A and line 1 to B (by time order or whatever). So A gets top=resourceIndex + 0/2, bottom = resourceIndex + 1/2; B gets top=resourceIndex + 1/2, bottom = resourceIndex + 2/2. For group2 (C), 1 order, C gets top=resourceIndex + 0/1, bottom = resourceIndex + 1/1. So each order's height is cellHeight / (its group size), and top/bottom are resourceIndex + (lineInGroup / groupSize) to resourceIndex + ((lineInGroup+1) / groupSize). So we need to:
+1. Build overlap groups (transitive): orders that overlap (directly or indirectly) are in the same group.
+2. Within each group, assign line numbers (0, 1, 2, ...) - we can use assignLinesToOrders for that.
+3. For each order, groupSize = its group's length, lineInGroup = order.line (within group), so top = resourceIndex + lineInGroup/groupSize, bottom = resourceIndex + (lineInGroup+1)/groupSize, and height = cellHeight/groupSize.
+
+Let me implement this. I need to add a function to partition orders into overlap groups, then for each group run assignLinesToOrders, then compute layout using group size.
+</think>
+继续查看 `renderPage.js` 和背景色相关逻辑，以便实现“按行排班”及修复高度计算。
+
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/bk-stuff/src/MCalendarView/renderPage.js
+[Tool call] Grep
+  pattern: workHours|workingHours|getGridCellConfig
+  path: /Users/sm1328/allenhu000/bk-stuff/src/MCalendarView
+
+[Tool result] Read
+
+[Tool result] Grep
+
+assistant:
+<think>
+Now I need to:
+
+1. **Issue 1 - Order height**: Partition orders per resource into "overlap groups". Only orders within the same group share the row height. So I need to:
+   - Add a function to group orders by overlap (transitive)
+   - For each group, run assignLinesToOrders to get line numbers within the group
+   - When computing layout, use group size (not global maxLines) for each order's height and top/bottom
+
+2. **Issue 2 - Grid background**: 
+   - When "服务类型" (service type): use workingHours for the whole grid (current behavior)
+   - When "资源类型" (resource type): each row (resource) may have its own schedule - so we need per-row work hours. The yAxisDataSource might have a schedule per resource (e.g. resource.workingHours or resource.schedule). I need to check what data structure is available. The prompt says "每一行员工的排班各有差异" - so each row has different employee shift. So getGridCellConfig needs to accept per-row schedule. So the signature might need to change to something like: getGridCellConfig(workingHours, date, yAxisDataSource) where for resource type we use each resource's schedule from yAxisDataSource[].workingHours or similar. Let me check the getGridCellConfig - it currently returns cellConfigs as an array of area configs. Each config has "area" with top, bottom, left, right - so we can have different areas per row. Currently bottom is yAxisDataSource.length (all rows). For per-row we'd set top and bottom to the row index and row index+1. So we need to:
+   - Detect type: if resource type (how? maybe from yAxisDataSource[0] or a flag in componentProp), use per-row schedule
+   - For each resource row, get that resource's working hours (e.g. resource.workingHours), compute cell config for that row only (area.top = rowIndex, area.bottom = rowIndex+1)
+   - Combine all configs
+
+Let me check the data structure - the prompt says "当是服务类型时，消费店铺时刻表，当时资源类型时，每一行员工的排班各有差异". So we need to know if we're in "service" or "resource" mode. This might be from componentProp or from yAxisDataSource. I'll assume we have a way to know - e.g. a prop like viewType: 'service' | 'resource', or we can check if each resource has its own workingHours. I'll add a parameter for viewType or use resource.workingHours when present.
+
+Implementing:
+
+**Fix 1 - getDataSource**: 
+- After getting resourceOrders and calling assignLinesToOrders, we need to partition lineOrders into overlap groups.
+- Overlap group: two orders are in the same group if they overlap (isTimeOverlap). Transitive closure.
+- For each order, find its group. Then within group, we already have line numbers from assignLinesToOrders - but those are global within the resource. We need line numbers within the group. So:
+  - Build overlap groups (array of arrays of orders)
+  - For each group, the orders already have .line from assignLinesToOrders - but that's relative to all orders. We need lines within group. So for each group, sort by start time, then assign lines within group (0, 1, 2, ...) - actually the line assignment within a group is just the order index if we sort by start time and assign 0,1,2 to non-overlapping... No. Within a group, orders overlap. So we need assignLinesToOrders within the group to get line 0, 1, etc. So for each group, run assignLinesToOrders(group). Then maxLinesInGroup = max(line)+1. So each order in group gets height = cellHeight / maxLinesInGroup, and top = resourceIndex + order.line/maxLinesInGroup, bottom = resourceIndex + (order.line+1)/maxLinesInGroup.
+- So the algorithm: 1) assignLinesToOrders(resourceOrders) - keep this to get initial line assignment. 2) Build overlap groups from resourceOrders (transitive). 3) For each group, get maxLineInGroup = max(order.line for order in group) + 1. Wait, within a group the line numbers from assignLinesToOrders might be 0,1,0,1 for 4 orders (two pairs). So maxLines = 2. So we need to re-run assignLinesToOrders within each group to get lines 0..k-1 for k orders. So for each group: lineOrdersInGroup = assignLinesToOrders(group). Then for each order in lineOrdersInGroup: maxLines = lineOrdersInGroup.length? No - maxLines = max(line)+1. So we have the group, we run assignLinesToOrders on the group to get line numbers, then each order gets height = cellHeight / (maxLineInGroup), top = resourceIndex + line/maxLinesInGroup, bottom = resourceIndex + (line+1)/maxLinesInGroup. Good.
+- So we need to partition resourceOrders into overlap groups first, then for each group run assignLinesToOrders(group), then when building dataSource we use the group's maxLines for that group's orders only.
+
+Let me write the partition function:
+
+```javascript
+static getOverlapGroups(orders) {
+  const groups = [];
+  const assigned = new Set();
+  for (const order of orders) {
+    if (assigned.has(order)) continue;
+    const group = [order];
+    assigned.add(order);
+    // BFS/DFS to find all orders that overlap (transitively) with this order
+    const stack = [order];
+    while (stack.length) {
+      const current = stack.pop();
+      for (const other of orders) {
+        if (assigned.has(other)) continue;
+        if (this.isTimeOverlap(current, other)) {
+          assigned.add(other);
+          group.push(other);
+          stack.push(other);
+        }
+      }
+    }
+    groups.push(group);
+  }
+  return groups;
+}
+```
+
+Then in getDataSource, for each resource:
+- resourceOrders, sort by start time
+- groups = this.getOverlapGroups(resourceOrders)
+- For each group: lineOrders = assignLinesToOrders(group). Then for each order in lineOrders: maxLines = max(lineOrders.map(o => o.line + 1)), orderHeight = cellHeight / maxLines, top = resourceIndex + order.line/maxLines, bottom = resourceIndex + (order.line+1)/maxLines. Add to dataSource.
+
+**Fix 2 - getGridCellConfig**:
+- Add a parameter or use yAxisDataSource to know: if each resource has its own workingHours (e.g. resource.workingHours), then for resource type we use per-row config. Otherwise use global workingHours for the whole grid.
+- So: if yAxisDataSource has items with resource.workingHours, we generate config per row. Otherwise use current logic (one config for whole grid).
+- Per row: for (let rowIndex = 0; rowIndex < yAxisDataSource.length; rowIndex++) { const resource = yAxisDataSource[rowIndex]; const rowWorkingHours = resource.workingHours ?? workingHours; // fallback to store hours. Then run the same slot logic but with area.top = rowIndex, area.bottom = rowIndex+1. Push to cellConfigs. }
+- We need to merge: currently we have one set of areas. For per-row we have multiple sets with different top/bottom. So we iterate each resource, get rowWorkingHours, compute slots for that row, push configs with area top=rowIndex, bottom=rowIndex+1.
+
+Let me implement.
+</think>
+正在实现两项修复：1) 按重叠组均分高度，不相关订单保持整行高度；2) 资源类型下按行使用排班（每行独立背景）。
+
+[Tool call] TodoWrite
+  todos: [{"id":"1","content":"Fix order height: only overlapping orders split row height","status":"in_progress"},{"id":"2","content":"Fix grid background: per-row schedule for resource type","status":"pending"}]
+  merge: false
+
+[Tool result] TodoWrite
+
+assistant:
+<think>
+Let me implement the overlap groups and change getDataSource to use per-group height. I need to add getOverlapGroups and then modify the forEach that builds dataSource.
+</think>
+
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/bk-stuff/src/MCalendarView/MCalendar.js
+  old_string:         /**
+         * 检查两个订单是否时间交叉
+         * @param {Object} order1 订单1
+         * @param {Object} order2 订单2
+         * @returns {boolean} 是否交叉
+         */
+        static isTimeOverlap(order1, order2) {
+            // 订单1的结束时间大于订单2的开始时间，且订单1的开始时间小于订单2的结束时间
+            return order1.endTime > order2.startTime && order1.startTime < order2.endTime;
+        }
+  new_string:         /**
+         * 检查两个订单是否时间交叉
+         * @param {Object} order1 订单1
+         * @param {Object} order2 订单2
+         * @returns {boolean} 是否交叉
+         */
+        static isTimeOverlap(order1, order2) {
+            // 订单1的结束时间大于订单2的开始时间，且订单1的开始时间小于订单2的结束时间
+            return order1.endTime > order2.startTime && order1.startTime < order2.endTime;
+        }
+
+        /**
+         * 将同一资源的订单按时间交叉关系划分为重叠组（传递闭包：A 与 B 交叉、B 与 C 交叉则 A/B/C 同组）
+         * 仅同组内订单均分行高，不相关订单保持整行高度
+         * @param {Array} orders 同一资源的订单数组
+         * @returns {Array<Array>} 重叠组数组，每组内订单相互（直接或间接）交叉
+         */
+        static getOverlapGroups(orders) {
+            if (!orders || orders.length === 0) return [];
+            const assigned = new Set();
+            const groups = [];
+
+            for (const order of orders) {
+                if (assigned.has(order)) continue;
+                const group = [order];
+                assigned.add(order);
+                const stack = [order];
+                while (stack.length) {
+                    const current = stack.pop();
+                    for (const other of orders) {
+                        if (assigned.has(other)) continue;
+                        if (this.isTimeOverlap(current, other)) {
+                            assigned.add(other);
+                            group.push(other);
+                            stack.push(other);
+                        }
+                    }
+                }
+                groups.push(group);
+            }
+            return groups;
+        }
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Now I need to change the getDataSource loop to use overlap groups: for each resource, get resourceOrders, sort, then get groups, then for each group run assignLinesToOrders(group), then for each order in the group compute layout using that group's maxLines (not the whole resource's maxLines).
+</think>
+
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/bk-stuff/src/MCalendarView/MCalendar.js
+  old_string:             // 5. 生成棋盘数据源
+            let dataSource = [];
+
+            // 遍历每个资源
+            finalYAxisDataSource.forEach((resource, resourceIndex) => {
+                const resourceOrders = orderMap[resource.resourceId] || [];
+
+                // 按开始时间排序
+                resourceOrders.sort((a, b) => a.startTime - b.startTime);
+
+                // 检测时间交叉并分配行
+                const lineOrders = this.assignLinesToOrders(resourceOrders);
+
+                // 计算该行的订单最大数量，用于均分高度
+                const maxLines = Math.max(...lineOrders.map(order => order.line + 1), 1);
+                const resourceCount = finalYAxisDataSource.length;
+                const cellHeight = this.getCellHeight(resourceCount);
+                const orderHeight = cellHeight / maxLines;
+
+                // 生成订单数据
+                lineOrders.forEach(order => {
+                    const { left, right } = this.getCellRange(order.startTime, order.endTime);
+
+                    // 计算布局和尺寸
+                    const top = resourceIndex + (order.line / maxLines);
+                    const bottom = resourceIndex + ((order.line + 1) / maxLines);
+
+                    dataSource.push({
+                        ...order,
+                        // layout用于描述卡片位置
+                        layout: {
+                            top,
+                            bottom,
+                            left,
+                            right
+                        },
+                        // size用于描述卡片尺寸
+                        size: {
+                            width: (right - left) * this.cellWidth - 2, // 上下留1px空白
+                            height: orderHeight - 2,// 上下留1px空白
+                        }
+                    });
+                });
+            });
+  new_string:             // 5. 生成棋盘数据源（仅同一重叠组内订单均分高度，不相关订单保持整行高度）
+            let dataSource = [];
+            const resourceCount = finalYAxisDataSource.length;
+            const cellHeight = this.getCellHeight(resourceCount);
+
+            finalYAxisDataSource.forEach((resource, resourceIndex) => {
+                const resourceOrders = orderMap[resource.resourceId] || [];
+                resourceOrders.sort((a, b) => a.startTime - b.startTime);
+
+                const overlapGroups = this.getOverlapGroups(resourceOrders);
+
+                overlapGroups.forEach(group => {
+                    const lineOrders = this.assignLinesToOrders(group);
+                    const maxLinesInGroup = Math.max(...lineOrders.map(o => o.line + 1), 1);
+                    const orderHeight = cellHeight / maxLinesInGroup;
+
+                    lineOrders.forEach(order => {
+                        const { left, right } = this.getCellRange(order.startTime, order.endTime);
+                        const top = resourceIndex + (order.line / maxLinesInGroup);
+                        const bottom = resourceIndex + ((order.line + 1) / maxLinesInGroup);
+
+                        dataSource.push({
+                            ...order,
+                            layout: {
+                                top,
+                                bottom,
+                                left,
+                                right
+                            },
+                            size: {
+                                width: (right - left) * this.cellWidth - 2,
+                                height: orderHeight - 2,
+                            }
+                        });
+                    });
+                });
+            });
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+Good. Now implement fix 2: getGridCellConfig should support per-row schedule when it's resource type. I need to:
+1. When each resource has its own workingHours (e.g. resource.workingHours), use per-row config: area.top = rowIndex, area.bottom = rowIndex + 1.
+2. Otherwise (service type / no per-resource hours), keep current behavior: use global workingHours for the whole grid.
+
+I'll add logic: if yAxisDataSource has at least one item with workingHours, treat as resource type and generate config per row. Otherwise use current logic.
+</think>
+
+
+[Tool call] TodoWrite
+  todos: [{"id":"1","content":"Fix order height: only overlapping orders split row height","status":"completed"},{"id":"2","content":"Fix grid background: per-row schedule for resource type","status":"in_progress"}]
+  merge: true
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/bk-stuff/src/MCalendarView/MCalendar.js
+  offset: 42
+  limit: 155
+
+[Tool result] TodoWrite
+
+[Tool result] Read
+
+assistant:
+<think>
+I need to refactor getGridCellConfig to:
+1. Detect "resource type": when any row has its own workingHours (e.g. yAxisDataSource[i].workingHours). So we need a way to know - the prompt says "当是服务类型时，消费店铺时刻表，当时资源类型时，每一行员工的排班各有差异". So we could check: if every resource has workingHours (or at least one has), use per-row. Or we could add an explicit parameter viewType. I'll use: if yAxisDataSource has length and the first item (or any item) has workingHours, use per-row schedule for each row (fallback to global workingHours when resource.workingHours is missing). So the logic:
+- usePerRowSchedule = yAxisDataSource.some(r => r && Array.isArray(r.workingHours) && r.workingHours.length > 0)  // or just r.workingHours
+- If usePerRowSchedule: for each row index, rowWorkingHours = yAxisDataSource[rowIndex].workingHours || workingHours. Then call a helper to get config for one row (same slot logic but top=rowIndex, bottom=rowIndex+1). Push all configs.
+- Else: current logic (whole grid with workingHours).
+
+I'll extract the "generate config for one set of slots (with given top/bottom)" into a helper so we don't duplicate. Actually the current code structure is: get dayConfig from workingHours, then generate cellConfigs with area top=0, bottom=yAxisDataSource.length. For per-row we'd do: for each rowIndex, get rowWorkingHours = resource.workingHours || workingHours, get dayConfig from rowWorkingHours, then generate configs with top=rowIndex, bottom=rowIndex+1.
+
+Let me add a helper that takes (workingHours, date, top, bottom) and returns the array of cell configs for that vertical range. Then getGridCellConfig either calls it once with (workingHours, date, 0, yAxisDataSource.length) or loops and calls it for each row with (rowWorkingHours, date, rowIndex, rowIndex+1).
+
+Actually the current function uses dayConfig from workingHours and builds configs. The only thing that changes per row is top and bottom in the area. So I can extract a function that builds configs given dayConfig and (top, bottom), and a function that given workingHours and date returns dayConfig. Then:
+- If per-row: for each row, dayConfig = getDayConfig(yAxisDataSource[i].workingHours || workingHours, date), configs = buildConfigsForArea(dayConfig, rowIndex, rowIndex+1), cellConfigs.push(...configs)
+- Else: dayConfig = getDayConfig(workingHours, date), cellConfigs = buildConfigsForArea(dayConfig, 0, yAxisDataSource.length)
+
+Let me implement by refactoring getGridCellConfig to have an inner helper for building configs for a vertical range (top, bottom), and then either loop over rows with per-row workingHours or call once with full height.
+</think>
+重构 `getGridCellConfig`：支持资源类型下按行使用排班（每行独立 `workingHours`）。
+
+[Tool call] StrReplace
+  path: /Users/sm1328/allenhu000/bk-stuff/src/MCalendarView/MCalendar.js
+  old_string:         // 单元格样式（根据店铺时刻表）
+        static getGridCellConfig(workingHours, date, yAxisDataSource = []) {
+            // 如果没有经营时间配置或日期无效，返回空配置
+            if (!Array.isArray(workingHours) || !date) {
+                return [];
+            }
+
+            // 解析日期，获取星期几（0-6，0为周日，1-6为周一到周六）
+            const targetDate = date instanceof Date ? date : new Date(date);
+            let dayNumber = targetDate.getDay();
+            // 转换为与workingHours匹配的格式（0为周日，1-6为周一到周六）
+
+            // 查找对应星期几的经营时间配置
+            const dayConfig = workingHours.find(day => day.weekday === dayNumber);
+
+            const cellConfigs = [];
+
+            if (dayConfig && dayConfig.enabled === 1) {
+                // 可用时间段：背景色#ffffff
+
+                // 生成可用时间段配置
+                (dayConfig.slots || []).forEach(slot => {
+                    const { start: startTime, end: endTime } = slot;
+
+                    // 计算开始和结束时间对应的分钟数
+                    const startMinutes = this.getMinutesFromTimeStr(startTime);
+                    const endMinutes = this.getMinutesFromTimeStr(endTime);
+
+                    // 转换为单元格数（每15分钟一个单元格）
+                    const left = Math.round((startMinutes / this.cellMinuteInterval) * 100) / 100;
+                    const right = Math.round((endMinutes / this.cellMinuteInterval) * 100) / 100;
+
+                    // 生成可用区域配置
+                    cellConfigs.push({
+                        "area": [
+                            {
+                                "bottom": yAxisDataSource.length, // 整个网格高度
+                                "left": left,
+                                "right": right,
+                                "top": 0
+                            }
+                        ],
+                        "config": {
+                            "backgroundColor": "#ffffff", // 可用时间段背景色
+                            "borderRadius": 0
+                        }
+                    });
+                });
+            }
+
+            // 生成不可用时间段配置
+            // 首先，创建一个包含所有24小时的时间段数组
+            const allDaySlots = [
+                { start: "00:00", end: "24:00" }
+            ];
+
+            // 如果有可用配置，需要减去可用时间段，得到不可用时间段
+            if (dayConfig && dayConfig.enabled === 1 && dayConfig.slots.length > 0) {
+                let unavailableSlots = [...allDaySlots];
+
+                // 对可用时间段进行排序
+                const sortedTimeSlots = [...dayConfig.slots].sort((a, b) => {
+                    return this.getMinutesFromTimeStr(a.start) - this.getMinutesFromTimeStr(b.start);
+                });
+
+                // 减去可用时间段，得到不可用时间段
+                sortedTimeSlots.forEach(slot => {
+                    const { start: startTime, end: endTime } = slot;
+                    const slotStart = this.getMinutesFromTimeStr(startTime);
+                    const slotEnd = this.getMinutesFromTimeStr(endTime);
+
+                    const newUnavailableSlots = [];
+                    unavailableSlots.forEach(unavailable => {
+                        const unavailableStart = this.getMinutesFromTimeStr(unavailable.start);
+                        const unavailableEnd = this.getMinutesFromTimeStr(unavailable.end);
+
+                        // 如果当前不可用时间段与可用时间段有重叠，分割为新的不可用时间段
+                        if (slotStart > unavailableStart) {
+                            // 添加可用时间段之前的不可用时间段
+                            newUnavailableSlots.push({
+                                start: unavailable.start,
+                                end: startTime
+                            });
+                        }
+
+                        if (slotEnd < unavailableEnd) {
+                            // 添加可用时间段之后的不可用时间段
+                            newUnavailableSlots.push({
+                                start: endTime,
+                                end: unavailable.end
+                            });
+                        }
+                    });
+
+                    unavailableSlots = newUnavailableSlots;
+                });
+
+                // 生成不可用时间段配置
+                unavailableSlots.forEach(slot => {
+                    const [startTime, endTime] = [slot.start, slot.end];
+
+                    // 计算开始和结束时间对应的分钟数
+                    const startMinutes = this.getMinutesFromTimeStr(startTime);
+                    const endMinutes = this.getMinutesFromTimeStr(endTime);
+
+                    // 转换为单元格数（每15分钟一个单元格）
+                    const left = Math.round((startMinutes / this.cellMinuteInterval) * 100) / 100;
+                    const right = Math.round((endMinutes / this.cellMinuteInterval) * 100) / 100;
+
+                    // 生成不可用区域配置
+                    cellConfigs.push({
+                        "area": [
+                            {
+                                "bottom": yAxisDataSource.length, // 整个网格高度
+                                "left": left,
+                                "right": right,
+                                "top": 0
+                            }
+                        ],
+                        "config": {
+                            "backgroundColor": "rgba(225, 228, 232, 0.60)", // 不可用时间段背景色,#E1E4E8透明度60
+                        }
+                    });
+                });
+            } else {
+                // 全天不可用
+                cellConfigs.push({
+                    "area": [
+                        {
+                            "bottom": yAxisDataSource.length, // 整个网格高度
+                            "left": 0,
+                            "right": 24 * 4, // 24小时 * 4个单元格/小时
+                            "top": 0
+                        }
+                    ],
+                    "config": {
+                        "backgroundColor": "rgba(225, 228, 232, 0.60)", // 全天不可用背景色
+                    }
+                });
+            }
+
+            return cellConfigs;
+        }
+  new_string:         /**
+         * 根据经营时间与日期解析出当日配置（星期几）
+         * @param {Array} workingHours 经营时间配置
+         * @param {Date|string|number} date 日期
+         * @returns {Object|null} dayConfig
+         */
+        static getDayConfig(workingHours, date) {
+            if (!Array.isArray(workingHours) || !date) return null;
+            const targetDate = date instanceof Date ? date : new Date(date);
+            const dayNumber = targetDate.getDay();
+            return workingHours.find(day => day.weekday === dayNumber) || null;
+        }
+
+        /**
+         * 为指定垂直范围 [areaTop, areaBottom] 生成单元格背景配置（可用/不可用时间段）
+         * @param {Object|null} dayConfig 当日经营时间配置
+         * @param {number} areaTop 区域顶部行索引
+         * @param {number} areaBottom 区域底部行索引
+         * @returns {Array} cellConfigs
+         */
+        static buildCellConfigsForArea(dayConfig, areaTop, areaBottom) {
+            const cellConfigs = [];
+
+            if (dayConfig && dayConfig.enabled === 1 && (dayConfig.slots || []).length > 0) {
+                (dayConfig.slots || []).forEach(slot => {
+                    const { start: startTime, end: endTime } = slot;
+                    const startMinutes = this.getMinutesFromTimeStr(startTime);
+                    const endMinutes = this.getMinutesFromTimeStr(endTime);
+                    const left = Math.round((startMinutes / this.cellMinuteInterval) * 100) / 100;
+                    const right = Math.round((endMinutes / this.cellMinuteInterval) * 100) / 100;
+                    cellConfigs.push({
+                        area: [{ bottom: areaBottom, left, right, top: areaTop }],
+                        config: { backgroundColor: "#ffffff", borderRadius: 0 }
+                    });
+                });
+
+                const allDaySlots = [{ start: "00:00", end: "24:00" }];
+                let unavailableSlots = [...allDaySlots];
+                const sortedTimeSlots = [...dayConfig.slots].sort((a, b) =>
+                    this.getMinutesFromTimeStr(a.start) - this.getMinutesFromTimeStr(b.start)
+                );
+
+                sortedTimeSlots.forEach(slot => {
+                    const slotStart = this.getMinutesFromTimeStr(slot.start);
+                    const slotEnd = this.getMinutesFromTimeStr(slot.end);
+                    const newUnavailableSlots = [];
+                    unavailableSlots.forEach(unavailable => {
+                        const unavailableStart = this.getMinutesFromTimeStr(unavailable.start);
+                        const unavailableEnd = this.getMinutesFromTimeStr(unavailable.end);
+                        if (slotStart > unavailableStart) {
+                            newUnavailableSlots.push({ start: unavailable.start, end: slot.start });
+                        }
+                        if (slotEnd < unavailableEnd) {
+                            newUnavailableSlots.push({ start: slot.end, end: unavailable.end });
+                        }
+                    });
+                    unavailableSlots = newUnavailableSlots;
+                });
+
+                unavailableSlots.forEach(slot => {
+                    const startMinutes = this.getMinutesFromTimeStr(slot.start);
+                    const endMinutes = this.getMinutesFromTimeStr(slot.end);
+                    const left = Math.round((startMinutes / this.cellMinuteInterval) * 100) / 100;
+                    const right = Math.round((endMinutes / this.cellMinuteInterval) * 100) / 100;
+                    cellConfigs.push({
+                        area: [{ bottom: areaBottom, left, right, top: areaTop }],
+                        config: { backgroundColor: "rgba(225, 228, 232, 0.60)" }
+                    });
+                });
+            } else {
+                cellConfigs.push({
+                    area: [{ bottom: areaBottom, left: 0, right: 24 * 4, top: areaTop }],
+                    config: { backgroundColor: "rgba(225, 228, 232, 0.60)" }
+                });
+            }
+
+            return cellConfigs;
+        }
+
+        /**
+         * 单元格样式：服务类型用店铺时刻表整表；资源类型时每行用该行资源的排班（workingHours）
+         * @param {Array} workingHours 店铺经营时刻表（默认/服务类型）
+         * @param {Date|string|number} date 日期
+         * @param {Array} yAxisDataSource Y 轴数据；若项含 workingHours 则按行使用该行排班
+         */
+        static getGridCellConfig(workingHours, date, yAxisDataSource = []) {
+            if (!date) return [];
+            const fallbackHours = Array.isArray(workingHours) ? workingHours : [];
+            const rowCount = (yAxisDataSource && yAxisDataSource.length) || 0;
+
+            // 资源类型：存在按行的排班（每行员工排班各异）
+            const usePerRowSchedule = rowCount > 0 && yAxisDataSource.some(
+                r => r && Array.isArray(r.workingHours) && r.workingHours.length > 0
+            );
+
+            const cellConfigs = [];
+
+            if (usePerRowSchedule) {
+                for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+                    const rowWorkingHours = (yAxisDataSource[rowIndex] && yAxisDataSource[rowIndex].workingHours) || fallbackHours;
+                    const dayConfig = this.getDayConfig(rowWorkingHours, date);
+                    cellConfigs.push(...this.buildCellConfigsForArea(dayConfig, rowIndex, rowIndex + 1));
+                }
+            } else {
+                // 服务类型：整表消费店铺时刻表
+                const dayConfig = this.getDayConfig(fallbackHours, date);
+                cellConfigs.push(...this.buildCellConfigsForArea(dayConfig, 0, rowCount || 1));
+            }
+
+            return cellConfigs;
+        }
+
+[Tool result] StrReplace
+
+assistant:
+<think>
+When usePerRowSchedule is true but some rows don't have workingHours, we use fallbackHours for that row (rowWorkingHours = ... || fallbackHours). When usePerRowSchedule is false, we use fallbackHours for the whole grid. But we need to handle the case when workingHours is empty - getDayConfig returns null, and buildCellConfigsForArea(null, ...) will hit the else branch (full grey). Good.
+
+One more thing: when rowCount is 0, we currently do cellConfigs.push(...this.buildCellConfigsForArea(dayConfig, 0, 1)) so we get one row of config. That's fine.
+
+Let me double-check: getGridCellConfig is called with (workingHours, date, finalYAxisDataSource). So yAxisDataSource is the list of resources. For resource type, each resource may have resource.workingHours (employee shift). So we're good. Mark todo complete and run linter.
+</think>
+
+
+[Tool call] ReadLints
+  paths: ["/Users/sm1328/allenhu000/bk-stuff/src/MCalendarView/MCalendar.js"]
+[Tool call] TodoWrite
+  todos: [{"id":"2","content":"Fix grid background: per-row schedule for resource type","status":"completed"}]
+  merge: true
+
+[Tool result] ReadLints
+
+[Tool result] TodoWrite
+
+assistant:
+<think>
+All done. Let me give a short summary to the user.
+</think>
+已按 `prompt.md` 里的两点做了修改，摘要如下。
+
+---
+
+## 1. 同一资源下「不相关订单」高度不再被压扁
+
+**原因**：之前用整行订单的 `maxLines` 均分高度，导致同一资源上**没有时间交叉**的订单也被当成多行之一，高度被均分。
+
+**做法**：
+- 新增 **`getOverlapGroups(orders)`**：按时间交叉做**传递闭包**分组（A 与 B 交叉、B 与 C 交叉则 A、B、C 同组）。
+- 生成数据源时：先对每个资源的订单做 **重叠组划分**，再**只在组内**做行分配与高度均分：
+  - 对每个重叠组调用 `assignLinesToOrders(group)`，得到组内 `maxLinesInGroup`；
+  - 仅该组内订单按 `orderHeight = cellHeight / maxLinesInGroup` 均分；
+  - 不参与任何重叠的订单单独成组，`maxLinesInGroup = 1`，仍占**整行高度**。
+
+效果：只有时间有交叉的订单会均分该行高度，其它订单保持整行高度不变。
+
+---
+
+## 2. 网格背景：服务类型用店铺时刻表，资源类型用每行排班
+
+**原因**：原先只用了全局 `workHours`（店铺经营时刻表），资源类型下「每一行员工排班不同」没有体现。
+
+**做法**：
+- 抽离 **`getDayConfig(workingHours, date)`**：根据日期取星期几对应的配置。
+- 抽离 **`buildCellConfigsForArea(dayConfig, areaTop, areaBottom)`**：在给定行范围 `[areaTop, areaBottom]` 内，按可用/不可用时间段生成背景配置。
+- **`getGridCellConfig(workingHours, date, yAxisDataSource)`** 分支：
+  - **资源类型**：若 `yAxisDataSource` 里存在带 `workingHours` 的项（即存在按行排班），则**按行**生成背景：
+    - 对每一行用 `resource.workingHours ?? workingHours`，没有则回退到店铺时刻表；
+    - 每行只影响自己的行范围：`areaTop = rowIndex`, `areaBottom = rowIndex + 1`。
+  - **服务类型**：没有按行排班时，仍用店铺 `workingHours` 为整表生成一块背景（`top: 0`, `bottom: rowCount`）。
+
+数据约定：资源类型下，Y 轴每行资源对象上挂 **`workingHours`**（与店铺时刻表同结构），即可驱动每行不同背景；不传则该行用店铺时刻表。
+
+---
+
+如需我根据你当前的 `yAxisDataSource` 或接口字段名再对 `workingHours` 的取值做一次适配，可以贴一下数据结构或调用处代码。
+
+user:
+<user_query>
+详细解释下MCalendar.getDataSource里处理交叉行的逻辑
+</user_query>
+
+assistant:
+<think>
+The user wants a detailed explanation of the logic in MCalendar.getDataSource that handles overlapping rows (交叉行). I need to read the current MCalendar.js file to explain the getDataSource logic, especially the overlap group and line assignment parts.
+</think>
+
+
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/bk-stuff/src/MCalendarView/MCalendar.js
+  offset: 298
+  limit: 130
+[Tool call] Read
+  path: /Users/sm1328/allenhu000/bk-stuff/src/MCalendarView/MCalendar.js
+  offset: 348
+  limit: 100
+
+[Tool result] Read
+
+[Tool result] Read
+
+assistant:
+<think>
+I have the full picture. Let me explain the cross-row (交叉行) logic in getDataSource in detail.
+</think>
+下面是 **`MCalendar.getDataSource`** 里「交叉行」相关逻辑的说明，按执行顺序拆开讲。
+
+---
+
+## 1. 交叉行在整体流程里的位置
+
+`getDataSource` 大致是：过滤订单 → 区分已分配/未分配 → 建 Y 轴和 `orderMap` → **按资源逐行算布局（这里处理交叉）** → 返回 `dataSource` 和 `finalYAxisDataSource`。
+
+「交叉行」的处理集中在第 5 步：对**每个资源行**，先按时间交叉关系分组，再在**组内**分配行号和高度，最后算 `layout` / `size`。
+
+---
+
+## 2. 时间交叉判定：`isTimeOverlap`
+
+```408:411:src/MCalendarView/MCalendar.js
+        static isTimeOverlap(order1, order2) {
+            // 订单1的结束时间大于订单2的开始时间，且订单1的开始时间小于订单2的结束时间
+            return order1.endTime > order2.startTime && order1.startTime < order2.endTime;
+        }
+```
+
+含义：两个时间段有重叠才算「交叉」  
+- `order1.endTime > order2.startTime`：1 的结束在 2 开始之后  
+- `order1.startTime < order2.endTime`：1 的开始在 2 结束之前  
+
+满足这两条就认为两单在时间上交叉，需要在同一行里用不同「子行」展示。
+
+---
+
+## 3. 重叠组划分：`getOverlapGroups`
+
+```419:443:src/MCalendarView/MCalendar.js
+        static getOverlapGroups(orders) {
+            if (!orders || orders.length === 0) return [];
+            const assigned = new Set();
+            const groups = [];
+
+            for (const order of orders) {
+                if (assigned.has(order)) continue;
+                const group = [order];
+                assigned.add(order);
+                const stack = [order];
+                while (stack.length) {
+                    const current = stack.pop();
+                    for (const other of orders) {
+                        if (assigned.has(other)) continue;
+                        if (this.isTimeOverlap(current, other)) {
+                            assigned.add(other);
+                            group.push(other);
+                            stack.push(other);
+                        }
+                    }
+                }
+                groups.push(group);
+            }
+            return groups;
+        }
+```
+
+作用：把**同一资源**下的订单，按「时间交叉」关系分成若干**重叠组**，且是**传递闭包**：
+
+- 若 A 与 B 交叉、B 与 C 交叉，则 A、B、C 会在同一组（即使 A、C 不直接交叉）。
+- 与组内任何订单都不交叉的订单，单独成组。
+
+实现方式：对每个尚未归属的订单做一次「种子」BFS：用栈从该订单出发，把所有与当前订单交叉的、且未分配的订单加入同一组并入栈，直到没有新的交叉订单。这样得到多个 `group`，每个 `group` 是「互相（直接或间接）交叉」的订单数组。
+
+意义：**只有同一组内的订单会一起均分这一行的高度**；不同组之间互不影响，所以「不相关订单」可以单独占满整行。
+
+---
+
+## 4. 组内行号分配：`assignLinesToOrders`
+
+```370:400:src/MCalendarView/MCalendar.js
+        static assignLinesToOrders(orders) {
+            // 克隆订单数组，避免修改原数据
+            const clonedOrders = [...orders];
+            // ...
+            for (let i = 0; i < clonedOrders.length; i++) {
+                const currentOrder = clonedOrders[i];
+                let maxLine = 0;
+                // 检查之前的订单是否与当前订单交叉
+                for (let j = 0; j < i; j++) {
+                    const previousOrder = clonedOrders[j];
+                    if (this.isTimeOverlap(currentOrder, previousOrder)) {
+                        maxLine = Math.max(maxLine, previousOrder.line + 1);
+                    }
+                }
+                currentOrder.line = maxLine;
+            }
+            return clonedOrders;
+        }
+```
+
+前提：这里的 `orders` 已经是**一个重叠组**里的订单（且通常已按开始时间排过序）。
+
+逻辑：
+
+- 按数组顺序遍历，给每个订单一个 `line`（0, 1, 2, …）。
+- 对当前订单，看它和**前面所有订单**是否时间交叉：若与前面某订单交叉，则当前订单的 `line` 至少要比该订单的 `line` 大 1。
+- 取所有「与当前订单交叉的前序订单」的 `line + 1` 的最大值，作为当前订单的 `line`。
+
+效果：同一时刻重叠的订单会被分到不同的 `line`，且用最少的行数（0 到 `maxLine`），这样后面用 `maxLinesInGroup = max(line) + 1` 就能得到「这一组需要几行」。
+
+---
+
+## 5. 在 `getDataSource` 里如何用「组 + 行号」算布局
+
+```326:358:src/MCalendarView/MCalendar.js
+            finalYAxisDataSource.forEach((resource, resourceIndex) => {
+                const resourceOrders = orderMap[resource.resourceId] || [];
+                resourceOrders.sort((a, b) => a.startTime - b.startTime);
+
+                const overlapGroups = this.getOverlapGroups(resourceOrders);
+
+                overlapGroups.forEach(group => {
+                    const lineOrders = this.assignLinesToOrders(group);
+                    const maxLinesInGroup = Math.max(...lineOrders.map(o => o.line + 1), 1);
+                    const orderHeight = cellHeight / maxLinesInGroup;
+
+                    lineOrders.forEach(order => {
+                        const { left, right } = this.getCellRange(order.startTime, order.endTime);
+                        const top = resourceIndex + (order.line / maxLinesInGroup);
+                        const bottom = resourceIndex + ((order.line + 1) / maxLinesInGroup);
+                        // ... dataSource.push(...)
+                    });
+                });
+            });
+```
+
+按步骤说：
+
+1. **按资源遍历**  
+   每个 `resource` 对应一行（`resourceIndex`），取出该行订单 `resourceOrders`，并按 `startTime` 排序。
+
+2. **重叠组**  
+   `getOverlapGroups(resourceOrders)` 得到多组，例如：  
+   - 组1：A、B 时间交叉  
+   - 组2：C 与谁都交叉 → 单独一组  
+
+3. **每组单独算行高和子行**  
+   - `assignLinesToOrders(group)` 只在本组内分配 `line`（0,1,…）。  
+   - `maxLinesInGroup = max(line) + 1` 表示这一组在这一行里占几「子行」。  
+   - `orderHeight = cellHeight / maxLinesInGroup`：**仅这一组**的订单均分这一行的单元格高度。
+
+4. **layout 的 top / bottom**  
+   - `top = resourceIndex + (order.line / maxLinesInGroup)`  
+   - `bottom = resourceIndex + ((order.line + 1) / maxLinesInGroup)`  
+   即：在同一资源行（`resourceIndex`）内，按 `line` 把 0～1 的区间均分给 `maxLinesInGroup` 行，每一单占其中一段。这样：
+   - 有交叉的订单（同组）会并排多行、均分高度；
+   - 不交叉的订单（单独一组）`maxLinesInGroup = 1`，`top = resourceIndex`、`bottom = resourceIndex + 1`，占满整行。
+
+5. **left / right**  
+   由 `getCellRange(order.startTime, order.endTime)` 按 15 分钟格换算成横向的 `left/right`，与交叉行无关，只表示时间跨度。
+
+---
+
+## 6. 小结（交叉行逻辑一句话）
+
+- **交叉**：用 `isTimeOverlap` 判断两单时间是否重叠。  
+- **分组**：`getOverlapGroups` 按时间交叉做传递闭包，把同一资源下的订单分成多个「重叠组」。  
+- **组内行号**：`assignLinesToOrders` 只在组内分配 `line`，保证时间重叠的订单不在同一 `line`。  
+- **高度与位置**：每组用自己的 `maxLinesInGroup` 均分该行高度，`layout.top/bottom` 按 `resourceIndex + line/maxLinesInGroup` 计算；不相关订单单独成组、`maxLinesInGroup = 1`，因此保持整行高度不变。
+
+整体效果：**同一资源行上，只有时间有交叉的订单会均分高度（多行），其它订单仍占整行。**
+
+user:
+<user_query>
+assignLinesToOrders 调用前不是已经按交叉分好组了吗，为什么内部还需要两层循环检查时间是否交叉
+</user_query>
+
+assistant:
+<think>
+The user is asking a good question: if we've already partitioned orders into overlap groups with `getOverlapGroups`, then when we call `assignLinesToOrders(group)` we're only passing orders that (transitively) overlap with each other. So why does `assignLinesToOrders` still need to do the two nested loops and check `isTimeOverlap` for every pair?
+
+The key distinction is:
+
+1. **getOverlapGroups** answers: "Which orders are in the same *group*?" — i.e., which orders have *some* (direct or indirect) time overlap with each other. So in one group, we know that every order overlaps with at least one other in the group (transitively). But that does NOT tell us *which specific line (slot)* each order should go on.
+
+2. **assignLinesToOrders** answers: "Given a set of orders that might overlap, assign each order a *line number* (0, 1, 2, ...) so that any two orders that *directly* overlap get different line numbers."
+
+Even within one group, not every pair of orders overlaps. Example: Group has A, B, C. A overlaps B, B overlaps C, but A might not overlap C (e.g. A: 8:00-9:00, B: 8:30-9:30, C: 9:00-10:00. A and C don't overlap). So we could have A on line 0, B on line 1, C on line 0 again (since C doesn't overlap A). So we need to assign line numbers by checking *direct* overlap, not just "same group". The group only tells us "these orders are related and will share the same row height division"; the line assignment still needs to look at actual pairwise overlap to minimize the number of lines and avoid putting overlapping orders on the same line.
+
+So the two layers serve different purposes:
+- getOverlapGroups: partition so that *only* orders that (transitively) overlap share the row height. Orders in different groups don't affect each other's height.
+- assignLinesToOrders: within a group, assign concrete line indices so that no two *directly* overlapping orders get the same line. We still need the inner loop because "being in the same group" doesn't mean "overlaps with everyone in the group" — we need pairwise checks to assign the correct line (e.g. A=0, B=1, C=0 in the example above).
+
+I'll explain this clearly to the user.
+</think>
+分组和分配行号解决的是两件不同的事，所以组内仍然要做「两两是否交叉」的检查。
+
+---
+
+## 分组 vs 行号
+
+- **`getOverlapGroups`** 只回答：**谁和谁属于同一组**（会一起均分这一行的高度）。  
+  用的是「时间交叉」的**传递闭包**：A 和 B 交叉、B 和 C 交叉 → A、B、C 同组，**并不要求** A 和 C 直接交叉。
+
+- **`assignLinesToOrders`** 要回答：**每个订单具体放在第几行（line 0, 1, 2…）**。  
+  规则是：**只要两个订单时间直接交叉，就不能在同一行**，所以要逐对检查 `isTimeOverlap`，才能正确分配 `line`。
+
+所以：**分好组只决定了「谁和谁一起均分高度」，并没有给出「谁和谁必须不同行」**，后者仍然依赖组内的两两交叉检查。
+
+---
+
+## 为什么组内还要检查交叉？
+
+因为**同组内并不是任意两个订单都交叉**。
+
+例如同一组里有 A、B、C 三个订单（已经按传递关系被分到一组）：
+
+- A：08:00–09:00  
+- B：08:30–09:30  
+- C：09:00–10:00  
+
+关系是：A 和 B 交叉，B 和 C 交叉，**A 和 C 不交叉**。
+
+- 若不在组内再做交叉判断，就不知道：  
+  - A 和 B 必须不同行（例如 A=line0, B=line1）；  
+  - B 和 C 必须不同行（C 不能也是 line1，否则和 B 冲突）；  
+  - A 和 C 可以同一行（都可以放在 line0）。
+
+正确分配可以是：A=0, B=1, C=0（两行就够了）。  
+如果不在 `assignLinesToOrders` 里对组内订单两两做 `isTimeOverlap`，就得不到这种「只让真正重叠的订单占不同行」的结果。
+
+---
+
+## 小结
+
+| 步骤 | 作用 | 是否还需要检查「两两交叉」 |
+|------|------|----------------------------|
+| `getOverlapGroups` | 按「传递交叉」分组，决定哪些订单一起均分行高 | 不负责分配具体行号 |
+| `assignLinesToOrders` | 在组内给每个订单一个 `line`，保证直接交叉的订单不同行 | **需要**，否则无法正确分配 line |
+
+所以：**分组解决「和谁一起分高度」，行号分配解决「和谁不能在同一行」**；后者必须知道「谁和谁直接交叉」，因此组内仍然需要两层循环 + `isTimeOverlap`。

@@ -1,0 +1,79 @@
+{
+  "name": "createTaskLinkV3",
+  "description": "创建任务关联",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "taskId": {
+        "type": "string",
+        "description": "任务ID"
+      },
+      "requestBody": {
+        "type": "object",
+        "properties": {
+          "linkedId": {
+            "type": "string",
+            "description": "关联目标对象ID (例如:taskId)"
+          },
+          "linkedType": {
+            "type": "string",
+            "enum": [
+              "task",
+              "post",
+              "event",
+              "work",
+              "testcase"
+            ],
+            "description": "关联目标对象类型"
+          },
+          "linkedData": {
+            "type": "object",
+            "properties": {
+              "subType": {
+                "type": "string",
+                "enum": [
+                  "web",
+                  "dingtalk-doc"
+                ],
+                "description": "外部关联的子类型,支持'web'和'dingtalk-doc',默认为'web'"
+              },
+              "title": {
+                "type": "string",
+                "description": "标题"
+              },
+              "content": {
+                "type": "string",
+                "description": "内容"
+              },
+              "url": {
+                "type": "string",
+                "description": "链接"
+              },
+              "thumbnailUrl": {
+                "type": "string",
+                "description": "缩略图"
+              },
+              "metaString": {
+                "type": "string",
+                "description": "额外数据, JSONString格式, 例如 {\"subType\": \"dingtalk-doc\"}"
+              }
+            },
+            "required": [
+              "title",
+              "url"
+            ],
+            "additionalProperties": false,
+            "description": "关联网页"
+          }
+        },
+        "additionalProperties": false,
+        "description": "创建任务关联请求体（参数 linkedId/linkedType 和 linkedData 二选一）"
+      }
+    },
+    "required": [
+      "taskId"
+    ],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

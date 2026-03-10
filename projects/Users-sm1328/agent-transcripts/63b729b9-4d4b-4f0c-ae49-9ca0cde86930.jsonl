@@ -1,0 +1,2 @@
+{"role":"user","message":{"content":[{"type":"text","text":"<user_query>\n当我在cursor执行pwd时，消耗将近100个token, 这个正常吗，分析原因，给出节省token的优化手段\n</user_query>"}]}}
+{"role":"user","message":{"content":[{"type":"text","text":"<user_query>\n 当我在cursor执行pwd时，消耗将近100个token, 这个正常吗，分析原因，给出节省token的优化手段\n</user_query>"}]}}

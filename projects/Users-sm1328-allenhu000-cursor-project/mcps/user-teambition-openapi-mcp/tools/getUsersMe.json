@@ -1,0 +1,8 @@
+{
+  "name": "getUsersMe",
+  "description": "本接口用户获取当前用户在企业中的基本成员信息，该接口只适用于 userToken",
+  "arguments": {
+    "type": "object",
+    "properties": {}
+  }
+}

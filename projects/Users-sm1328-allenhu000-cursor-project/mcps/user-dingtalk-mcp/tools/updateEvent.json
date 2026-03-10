@@ -1,0 +1,61 @@
+{
+  "name": "updateEvent",
+  "description": "修改已存在的日程信息",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "unionId": {
+        "type": "string",
+        "description": "日程组织者的unionId"
+      },
+      "calendarId": {
+        "type": "string",
+        "description": "日程所属的日历ID，统一为primary"
+      },
+      "eventId": {
+        "type": "string",
+        "description": "要修改的日程ID"
+      },
+      "id": {
+        "type": "string",
+        "description": "要修改的日程ID，和eventId参数的值一样。"
+      },
+      "summary": {
+        "type": "string",
+        "description": "日程标题"
+      },
+      "description": {
+        "type": "string",
+        "description": "日程描述"
+      },
+      "start": {
+        "type": "object",
+        "description": "日程开始时间对象。非全天日程格式：{\"dateTime\":\"2021-09-20T10:15:30+08:00\",\"timeZone\":\"Asia/Shanghai\"}；全天日程格式：{\"date\":\"2021-09-20\"}"
+      },
+      "end": {
+        "type": "object",
+        "description": "日程结束时间对象。非全天日程格式：{\"dateTime\":\"2021-09-20T11:15:30+08:00\",\"timeZone\":\"Asia/Shanghai\"}；全天日程格式：{\"date\":\"2021-09-21\"}（全天日程结束日期需要+1天）"
+      },
+      "isAllDay": {
+        "type": "boolean",
+        "description": "是否全天日程"
+      },
+      "location": {
+        "type": "object",
+        "description": "日程地点对象",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "日程地点的名称。"
+          }
+        }
+      }
+    },
+    "required": [
+      "unionId",
+      "calendarId",
+      "eventId",
+      "id"
+    ]
+  }
+}

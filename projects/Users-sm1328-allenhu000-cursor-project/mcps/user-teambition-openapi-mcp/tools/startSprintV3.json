@@ -1,0 +1,41 @@
+{
+  "name": "startSprintV3",
+  "description": "开始迭代",
+  "arguments": {
+    "type": "object",
+    "properties": {
+      "projectId": {
+        "type": "string",
+        "description": "项目 ID"
+      },
+      "sprintId": {
+        "type": "string",
+        "description": "迭代 ID"
+      },
+      "requestBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "description": "The JSON request body."
+      }
+    },
+    "required": [
+      "projectId",
+      "sprintId"
+    ],
+    "additionalProperties": false,
+    "$schema": "http://json-schema.org/draft-07/schema#"
+  }
+}

@@ -1,0 +1,3 @@
+{"role":"user","message":{"content":[{"type":"text","text":"<user_query>\n在钉钉我的文档里创建一个文档，标题：全球主线建设2.13.0\n</user_query>"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"先获取\"我的文档\"根目录，然后创建文档。\n\nThe user wants to create a document in DingTalk \"My Documents\" with the title \"全球主线建设2.13.0\". \n\nI need to:\n1. First get the root dentry UUID of \"My Documents\"\n2. Then create a document under that root node"}]}}
+{"role":"assistant","message":{"content":[{"type":"text","text":"文档已创建成功：\n\n- **标题**：全球主线建设2.13.0\n- **链接**：[点击打开文档](https://alidocs.dingtalk.com/i/nodes/1DKw2zgV2PowLr2ACBAZkX2j8B5r9YAn?utm_scene=person_space)\n\n文档位于\"我的文档\"根目录下，可以直接通过链接访问。"}]}}

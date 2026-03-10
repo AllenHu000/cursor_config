@@ -1,0 +1,8 @@
+{
+  "name": "list-domains",
+  "description": "列出所有可用的临时邮箱域名，创建邮箱前先调用此接口获取 domain 列表，再由用户选择后调用 create-inbox",
+  "arguments": {
+    "type": "object",
+    "properties": {}
+  }
+}
