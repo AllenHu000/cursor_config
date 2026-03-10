@@ -92,20 +92,100 @@ Cursor 自带的 **Settings Sync** 只同步「设置、快捷键、扩展」等
 
 不要添加 `!mcp.json`，保证真实配置不提交。
 
-### 2.4 新设备拉取后
+### 2.4 新设备：空目录时
 
 ```bash
+cd ~
+git clone <你的私有仓库> .cursor
 cd ~/.cursor
-git clone <你的私有仓库> .   # 或 pull
 cp mcp.json.example mcp.json
-# 编辑 mcp.json：替换 {{CURSOR_HOME}} 和所有占位符
+# 编辑 mcp.json：替换路径占位符和所有 YOUR_* 为真实值
+cd mcp-servers/maxiot-mcp && npm i && cd ../temp-mail-mcp && npm i   # 本地 MCP 需装依赖
 ```
 
 若 MCP 用 `node` 跑本地脚本，新设备需已安装 Node，路径用本机 `~/.cursor` 的绝对路径。
 
 ---
 
-## 3. 可选：云盘同步（不推荐放敏感信息）
+## 3. 已有 .cursor 时如何克隆与取舍
+
+本机已经有一个 `~/.cursor`（有 rules、mcp.json 等）时，**不要**直接 `git clone ... .cursor`（会冲突或覆盖）。用下面两种方式之一。
+
+### 3.1 策略概览
+
+| 来源 | 建议 | 说明 |
+|------|------|------|
+| **仓库里** | 用仓库的 | rules、skills、commands、mcp-servers、docs、mcp.json.example |
+| **本机已有** | 保留 | mcp.json（含本机 token/路径）、projects/、以及你不想被覆盖的个别文件 |
+
+- **mcp.json**：始终用本机已有，或从 `mcp.json.example` 新填一份；不要用仓库里的（仓库里也没有）。
+- **projects/**：仓库已不跟踪，本机保留即可。
+
+### 3.2 做法 A：克隆到临时目录再合并（推荐）
+
+不覆盖现有 `~/.cursor`，从仓库只「取」要同步的目录进去。
+
+```bash
+# 1. 克隆到临时目录
+git clone <你的私有仓库> ~/cursor_config_repo
+cd ~/cursor_config_repo
+
+# 2. 把仓库里的内容合并进现有 .cursor（按需二选一）
+
+# 2a. 直接覆盖：用仓库的 rules/skills/commands/mcp-servers/docs 覆盖本机
+cp -R rules skills commands mcp-servers docs ~/.cursor/
+
+# 2b. 保守合并：只复制本机没有的文件，不覆盖已有
+for d in rules skills commands mcp-servers docs; do
+  [ -d "$d" ] && cp -Rn "$d" ~/.cursor/
+done
+cp -n mcp.json.example ~/.cursor/ 2>/dev/null || true
+
+# 3. 若本机还没有 mcp.json，从模板复制并编辑
+[ ! -f ~/.cursor/mcp.json ] && cp ~/.cursor/mcp.json.example ~/.cursor/mcp.json
+
+# 4. 本地 MCP 装依赖
+cd ~/.cursor/mcp-servers/maxiot-mcp && npm i
+cd ../temp-mail-mcp && npm i
+
+# 5. 删临时克隆（可选）
+rm -rf ~/cursor_config_repo
+```
+
+- **2a**：本机对 rules/skills 等的修改会被仓库版本覆盖，适合「以仓库为准」。  
+- **2b**：本机已有文件不动，只新增仓库里有而本机没有的，适合「尽量保留本机、只补充缺失」。
+
+### 3.3 做法 B：本机改成 Git 工作区再 pull
+
+让现有 `~/.cursor` 直接成为克隆目录，以后用 `git pull` 更新。
+
+```bash
+# 1. 备份本机独有的
+cp ~/.cursor/mcp.json ~/mcp.json.bak
+# projects/ 不同步，无需备份
+
+# 2. 若已有 .git（例如之前 clone 过），直接拉取
+cd ~/.cursor
+git fetch origin && git reset --hard origin/main
+
+# 3. 若没有 .git：先备份整个 .cursor 再克隆
+mv ~/.cursor ~/.cursor.bak
+git clone <你的私有仓库> ~/.cursor
+cp ~/.cursor.bak/mcp.json ~/.cursor/mcp.json
+# 需要的话从 .cursor.bak 里再拷回 projects、plugins 等
+```
+
+之后在这台机器上：改 rules/skills 等后 `git add`、`git commit`、`git push`；**不要**提交 `mcp.json`。
+
+### 3.4 取舍小结
+
+- **要「和仓库一致」**：用做法 A 的 2a 或做法 B，以仓库为准覆盖本机 rules/skills/commands/mcp-servers/docs。  
+- **要「保留本机修改」**：用做法 A 的 2b，只从仓库补缺；或先备份再按做法 B，再手动把本机独有文件拷回。  
+- **mcp.json、projects/**：一律保留本机版本，不来自仓库。
+
+---
+
+## 4. 可选：云盘同步（不推荐放敏感信息）
 
 把 `~/.cursor` 中**不含敏感信息**的目录（如 rules、skills、commands、mcp-servers）放到 iCloud / Dropbox / OneDrive 等，再在各设备用 **符号链接** 链回 `~/.cursor/rules` 等。
 
@@ -114,7 +194,7 @@ cp mcp.json.example mcp.json
 
 ---
 
-## 4. 小结
+## 5. 小结
 
 | 方式 | 适用 | 注意 |
 |------|------|------|
