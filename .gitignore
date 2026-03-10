@@ -1,0 +1,34 @@
+# Ignore everything in .cursor
+*
+!.gitignore
+# projects/ 不同步，仅本地
+# Plugin cache (rules, skills, agents)
+!plugins/
+!plugins/**
+# Built-in Cursor skills
+!skills-cursor/
+!skills-cursor/**
+# User's personal skills
+!skills/
+!skills/**
+# User's personal slash commands
+!commands/
+!commands/**
+# User's plan files
+!plans/
+!plans/**
+# Subagent state/transcripts
+!subagents/
+!subagents/**
+# User-level cursor rules
+!rules/
+!rules/**
+# MCP template and local server code (for sync); mcp.json stays untracked
+!mcp.json.example
+!mcp-servers/
+!mcp-servers/**
+mcp-servers/**/node_modules/
+mcp-servers/**/node_modules/**
+# Sync doc
+!docs/
+!docs/**
