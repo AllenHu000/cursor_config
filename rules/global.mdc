@@ -37,7 +37,7 @@ alwaysApply: true
 - 如果我说“初始化项目”之类的，通过`init-project`命名进行初始化。
 - 我说的项目一般指大程序项目（maxiot）,可以用`maxiot-mcp`
 - 我说TB，指的是Teambition管理工具，可以用`teambition-openapi-mcp`
-- 我说文档，如果不加特殊说明，指的是钉钉文档。我的文档指的是钉钉文档下“我的文档”工作空间
+- 我说'我的文档'，如果不加特殊说明，指的是钉钉文档下“我的文档”工作空间, 优先使用工作所在组织mcp`dingtalk-docs-mcp-org`，其次个人组织mcp`dingtalk-docs-mcp-personal`。
 
 ## MCP
 - 实现MCP时，同时配套的Skill、使用文档也需要具备
@@ -46,15 +46,44 @@ alwaysApply: true
 ## 大程序（maxIot）
 我参与的低代码平台，在线IDE
 - [开发者中心](https://dev.maxiot.com/)
-- [大程序文档中心](https://doc.maxiot.com/developer?page=readme&lang=zh)，可通过lang:zh/en切换中英文
+- [大程序开发者文档中心](https://doc.maxiot.com/developer?page=readme&lang=zh)，可通过lang:zh/en切换中英文
 - 大程序登录开发者中心需要登录账号，需要选择账号所参与的组织（tenantCode,tenantName）,每个组织下有若干个项目（project）
-- 几个概念：
+### 组织（或租户）
+登录账号可能是多个租户下的成员，可以切换至不同的组织（或租户）
 | 描述 | 对应取值 |
 |---------|----------|
 | 组织 | tenantCode，tenantName ，tenantAlias|
 | 租户code | tenantCode |
-| 项目code | projectCode |
+
+### 工程（大程序项目）
+- 每个组织下会有多个大程序工程，工程按类型（projectType）分为：
+| 工程类型projectType | 含义 |
+|---------|----------|
+| application  | 应用工程 |
+| model  | 模型工程 |
+| data  | 数据工程 |
+| component  | 组件工程 |
+
+- application应用工程还有子类型projectSubType：
+| projectSubType | 含义 |
+|---------|----------|
+| web  | web 应用 |
+| h5  |  h5应用 |
+| app  | 安卓应用 |
+- 安卓应用工程构建产物是一个apk包，构建记录里取outcomeUrl字段
+
+
+- 每个工程会有不同的迭代版本，每次迭代对应不同的迭代code（iterationCode）
+- 每个工程的每次迭代版本里可以多次构建，每次构建会有不同的构建日志（logUrl）
+- 工程详情信息有几个重要的概念如下：
+| 描述 | 对应取值 |
+|---------|----------|
+| 项目code（唯一） | projectCode |
+| appId（唯一） | appId |
 | 迭代code | iterationCode |
+| 构建日志  |  logUrl |
+| 引擎版本信息  |  prjEngineDTO |
+| 货币配置信息  |  countryConfig |
 
 
 ## 主要TB项目

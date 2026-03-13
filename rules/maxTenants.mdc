@@ -1,0 +1,46 @@
+---
+description: 全局通用规则，租户信息
+globs:
+alwaysApply: true
+---
+
+# 租户（组织）列表
+- 命中优先级：别名 > 组织名称
+
+  ┌──────────────────────────────┬────────────────────────────┬────────────────────────────────────┐
+  │ 组织名称                     │ 别名                       │ tenantCode                         │
+  ├──────────────────────────────┼────────────────────────────┼────────────────────────────────────┤
+  │ *飞                          │ 是你的阿飞呀               │ TNT220630q16gvmg407ybh2a2js8dbjuw7 │
+  │ 上海商米科技集团股份有限公司 │ 商米科技团队               │ TNT2207012d92c4ltymupk416s8sckn1nk │
+  │ 商米（上海）科技有限公司     │ 商米官方服务能力           │ TNT220701cd80qzanr879eetlbtvfqvivl │
+  │ 上海安必生制药技术有限公司   │ 商迈测试集合部             │ TNT2207066kv9622l8gf5qn6sc9p4u2pja │
+  │ 武汉市华甜生物科技有限公司   │ 展会大程序演示 1           │ TNT220811selrg108atgd84sjlqg4ip3x3 │
+  │ 保定正源电气科技有限公司     │ sg新加坡租户测试           │ TNT220811k89naeflbt44rqbyy217ise4n │
+  │ Sunmi TH                     │ Sunmi TH                   │ TNT221031vlpmjl9c7vmj0afql3d6ri6f9 │
+  │ 杭州掌银科技有限责任公司     │ 掌银科技                   │ TNT221202nlybzb6630b2ip17ig6ilvbyl │
+  │ Max Program Asset            │ Max Program Asset          │ TNT231030n19mnzix65ltjsd0bdkcgqasu │
+  │ Hong Hea Technology          │ Hong Hea Technology Co Ltd │ TNT2405234lhxv7dflsqkslf0p96fr1xqh │
+  │ POWERPOS, INC.               │ POWERPOS                   │ TNT240603dm2ib4mrq8ggn6cbx2n7dgp6q │
+  │ 愛食品有限公司               │ A Food Limited             │ TNT240801egpn2nyj7a4l1ad412rj83lcl │
+  │ 镇江砥石网络科技有限公司     │ Desty POS                  │ TNT240815s890b16xxvrq3rtfcccfwgtpn │
+  │ 湖北纳新网络科技有限公司     │ 纳客软件                   │ TNT241025y4izi4713907yu70s7t58b3wb │
+  │ PT UniPay Tech Indonesia     │ UniPay Tech                │ TNT250513ciyjwxz9195tyav77lqjm13dh │
+  │ 深圳贝酷科技有限公司         │ PayCools HQ                │ TNT25051699j4fq2lx1ujn4r94fbnmp0pb │
+  │ 杭州智珈云科技有限公司       │ 杭州智珈云科技有限公司     │ TNT250610lzj59ft7ddf9yjlud753xr4ap │
+  │ TemplateDemo4                │ TemplateDemo4              │ TNT250703d03ge1wwmrguj6zclcq3zy5f7 │
+  │ 北京智合云鼎科技有限公司     │ 九点半                     │ TNT241125hpsuxm7rq0amdxb19cp64miki │
+  │ 丹东电视机总厂               │ 灾备演练                   │ TNT241202jyfnvdnwb8sk17hcvgcndi2lr │
+  │ 广东赋利科技有限公司         │ 广东赋利科技有限公司       │ TNT241217gsti1gmsf6mqicn23b54mi3vd │
+  │ CardBiz Solutions SDN BHD    │ CardBiz Solutions          │ TNT250109etzatwekkimcnn74k7b56cv9r │
+  │ 四川查哈亚科技有限公司       │ Cahaya Group               │ TNT250113wwqppa7kkmdc724iwwt4davb7 │
+  │ Zoinla Sdn Bhd               │ SunPos                     │ TNT250325hjrwcblmq39fqwlpe3ruyutuh │
+  │ PT Gunung Makmur Indonesia   │ GMI                        │ TNT250331xd5iqs55wklwcec5376uizlru │
+  │ PKM Technologies Sdn Bhd     │ Starfish POS               │ TNT250527jfz2pu249qznnex8qi0yc172t │
+  │ SUNMAX(MY)                   │ MaxProgram Asset MY        │ TNT250728v1pxz919748w7cybd55r5dtk8 │
+  │ Max Asset(TH)                │ Max Asset(TH)              │ TNT250806s7x756yx72hh5sk40nni1j8zq │
+  │ Max Asset(AE)                │ Max Asset(AE)              │ TNT250811uxqvqhvnvk6f3hererqt344in │
+  │ 广州黑米信息科技有限公司     │ 黑米科技                   │ TNT251201e0t1ajzw97hbucphhi953fs6h │
+  │ PT POP JOY RETAIL            │ POP JOY                    │ TNT26011529uuep11scdmey0kaujf7v4tq │
+  │ AAA                          │ Spain Pos                  │ TNT260123s9gv2typk1cumxt0hjq0zc8w7 │
+  │ 香港黑米科技有限公司         │ 香港黑米科技有限公司       │ TNT260126qihg5t2xlw3f1g0pxyuz2ksvj │
+  │ First National Bank          │ First National Bank(FNB)   │ TNT2601280js4zvnt1x7q67avkaiysj5b4 │

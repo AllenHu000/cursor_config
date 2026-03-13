@@ -1,3 +1,4 @@
+import { spawnSync } from "child_process";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -107,6 +108,55 @@ const server = new McpServer({
   version: "1.0.0",
 });
 
+
+/**
+ * 
+ */
+
+
+
+// ---- Tool: 查询已加入的组织（租户）列表 ----
+
+server.tool(
+  "query-tenant-list",
+  "查询当前账号已加入的 MaxIoT 组织（租户）列表，用于切换组织或查看可访问的组织",
+  {
+    keyword: z.string().optional().describe("搜索关键字，可选，按组织名等过滤"),
+    tenantCode: z.string().optional().describe("当前上下文租户编码，不传使用环境变量默认值"),
+  },
+  async ({ keyword, tenantCode }) => {
+    try {
+      const tc = tenantCode || config.tenantCode;
+      const data = await callGateway(
+        "queryJoinedTenant",
+        "/v3/max/coral/public/MemberQueryFacade/queryJoinedTenant",
+        {
+          request: {
+            permSet: [
+              "PROJECT_MEMBER_ADD",
+              "PROJECT_MEMBER_EDIT",
+              "PROJECT_MEMBER_DEL",
+              "PROJECT_DATA_EDIT",
+              "PROJECT_ANDROID_STRUCTURE",
+              "PROJECT_WEB_DEPLOY",
+              "PROJECT_COMPONENTS_PUBLISH",
+              "PROJECT_IDE_EDIT",
+              "TENANT_MANAGE_UPDATE_TENANT_INFO",
+              "TENANT_MANAGE_AUTH_ENTITY",
+            ],
+            keyWord: keyword ?? null,
+            tenantCode: tc || undefined,
+          },
+          context: makeContext(tc),
+        }
+      );
+      return ok(data);
+    } catch (e) {
+      return fail(e.message);
+    }
+  }
+);
+
 // ---- Tool: 查询项目列表 ----
 
 server.tool(
@@ -180,6 +230,114 @@ server.tool(
     }
   }
 );
+
+// ---- Tool: 获取某工程指定迭代的最新一条构建记录 ----
+
+server.tool(
+  "query-last-build-info",
+  "获取指定工程、指定迭代的最新一条构建记录（last build info），返回包含 logUrl 等构建信息。iterationCode 可从项目详情 query-project-detail 中获取。",
+  {
+    projectCode: z.string().describe("项目编码，如 PRJ260304..."),
+    iterationCode: z.string().describe("迭代编码，如 ITE260310...，可从项目详情获取"),
+    tenantCode: z.string().optional().describe("租户编码，不传使用环境变量默认值"),
+    iterationName: z.string().optional().describe("迭代名称，可选，如 SI260310-0049970"),
+    buildModel: z.string().optional().default("develop").describe("构建模式，默认 develop"),
+    oneselfBuild: z.boolean().optional().default(true).describe("是否本人构建"),
+    projectSubType: z.string().optional().default("app").describe("项目子类型，默认 app"),
+    componentAdapType: z.string().optional().default("app").describe("组件适配类型，默认 app"),
+  },
+  async ({
+    projectCode,
+    iterationCode,
+    tenantCode,
+    iterationName,
+    buildModel,
+    oneselfBuild,
+    projectSubType,
+    componentAdapType,
+  }) => {
+    try {
+      const tc = tenantCode || config.tenantCode;
+      const data = await callGateway(
+        "getLastBuildInfo",
+        "/v3/max/starfish/public/MaxReleaseFacade/getLastBuildInfo",
+        {
+          request: {
+            iterationCode,
+            iterationName: iterationName ?? "",
+            buildModel,
+            oneselfBuild,
+          },
+          context: {
+            iterationCode,
+            projectCode,
+            tenantCode: tc,
+            projectSubType,
+            componentAdapType,
+          },
+        }
+      );
+      return ok(data);
+    } catch (e) {
+      return fail(e.message);
+    }
+  }
+);
+
+// ---- Tool: 安装 APK 到设备（调用本地 apk_installer） ----
+
+const APK_INSTALLER_BIN = process.env.APK_INSTALLER_PATH || "apk_installer";
+
+server.tool(
+  "install-apk",
+  "使用本地 apk_installer 将 APK 安装到已连接的 Android 设备。URL 需为构建产物下载地址（可含 downloadName 参数），可从 query-last-build-info 等接口获取。",
+  {
+    apkUrl: z.string().describe("APK 下载 URL，需包含 downloadName 参数"),
+    device: z.string().optional().describe("设备序列号，多设备时指定"),
+    force: z.boolean().optional().default(false).describe("是否强制覆盖已存在文件"),
+    outputDir: z.string().optional().describe("下载输出目录，默认当前目录"),
+  },
+  async ({ apkUrl, device, force, outputDir }) => {
+    try {
+      const args = [];
+      if (outputDir) args.push("-o", outputDir);
+      if (device) args.push("-d", device);
+      if (force) args.push("-f");
+      args.push(apkUrl);
+
+      const result = spawnSync(APK_INSTALLER_BIN, args, {
+        encoding: "utf-8",
+        timeout: 300000,
+      });
+
+      const stdout = (result.stdout || "").trim();
+      const stderr = (result.stderr || "").trim();
+      const code = result.status ?? (result.error ? -1 : 0);
+
+      if (code !== 0) {
+        const msg = stderr || stdout || result.error?.message || `exit ${code}`;
+        return fail(msg);
+      }
+      return ok({
+        success: true,
+        stdout: stdout || undefined,
+        stderr: stderr || undefined,
+      });
+    } catch (e) {
+      return fail(e.message);
+    }
+  }
+);
+
+/**
+ * TODO:
+ * 1. 切换组织（或仅文档说明用环境变量切换）
+ * 2. （已实现）获取工程指定迭代最新构建：query-last-build-info
+ * 3. 触发工程构建
+ * 4. （已实现）安装 APK：install-apk（依赖本地 apk_installer）
+ *
+ * 完整链路：登录 -> query-tenant-list 获取组织列表 -> 切 env 或选 tenantCode -> query-project-list -> query-project-detail（拿 iterationCode）-> query-last-build-info
+ */
 
 // ---------------------------------------------------------------------------
 //  新增 tool 模板（复制下面的块，修改参数即可）
